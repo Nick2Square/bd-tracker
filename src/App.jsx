@@ -369,7 +369,7 @@ export default function App() {
 
       <div style={{ background: "#fff", borderBottom: "1px solid #EBEBEB", padding: "12px 40px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }} onClick={() => setPage("home")}>
-          <img src="/src/logo.png" alt="2Square Talent" style={{ height: 32, width: "auto", objectFit: "contain" }} />
+          <img src="/logo.png" alt="2Square Talent" style={{ height: 32, width: "auto", objectFit: "contain" }} />
         </div>
         <div style={{ display: "flex", gap: 4 }}>
           <button className={`nav-btn e ${page === "home" ? "active" : ""}`} onClick={() => setPage("home")}>Home</button>
