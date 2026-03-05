@@ -272,6 +272,16 @@ export default function App() {
     fetchContacts();
   }, []);
 
+  // Keepalive ping to prevent Supabase pausing on free tier
+  useEffect(() => {
+    const ping = async () => {
+      await supabase.from("contacts").select("id").limit(1);
+    };
+    ping();
+    const interval = setInterval(ping, 1000 * 60 * 60 * 24 * 3); // every 3 days
+    return () => clearInterval(interval);
+  }, []);
+
   const fetchContacts = async () => {
     setLoading(true);
     const { data, error } = await supabase.from("contacts").select("*").order("next_due", { ascending: true });
