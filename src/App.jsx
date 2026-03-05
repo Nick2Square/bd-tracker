@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -133,6 +133,19 @@ const OwnerBar = ({ contacts }) => {
 const CalendarPicker = ({ value, onChange, label }) => {
   const [open, setOpen] = useState(false);
   const [viewing, setViewing] = useState(() => value ? new Date(value) : new Date());
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const triggerRef = useRef(null);
+
+  const openCalendar = () => {
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const calHeight = 360;
+      const top = spaceBelow > calHeight ? rect.bottom + 6 : rect.top - calHeight - 6;
+      setPos({ top, left: rect.left });
+    }
+    setOpen(!open);
+  };
 
   const today = new Date(); today.setHours(0,0,0,0);
   const selected = value ? new Date(value) : null;
@@ -180,7 +193,7 @@ const CalendarPicker = ({ value, onChange, label }) => {
   return (
     <div style={{ position: "relative" }}>
       {label && <label className="lbl">{label}</label>}
-      <div onClick={() => setOpen(!open)} style={{
+      <div ref={triggerRef} onClick={openCalendar} style={{
         background: "#fff", border: "1px solid #E5E5E5", borderRadius: 6,
         padding: "9px 12px", cursor: "pointer", fontFamily: "Epilogue, sans-serif",
         fontSize: 13, color: value ? "#1a1a1a" : "#9CA3AF",
@@ -192,7 +205,7 @@ const CalendarPicker = ({ value, onChange, label }) => {
       </div>
       {open && (
         <div style={{
-          position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 999,
+          position: "fixed", top: pos.top, left: pos.left, zIndex: 9999,
           background: "#fff", border: "1px solid #E5E5E5", borderRadius: 10,
           boxShadow: "0 8px 30px rgba(0,0,0,0.12)", padding: 16, width: 280,
         }} onClick={e => e.stopPropagation()}>
@@ -790,7 +803,7 @@ export default function App() {
       {/* ADD MODAL */}
       {showAdd && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, backdropFilter: "blur(4px)" }} onClick={() => setShowAdd(false)}>
-          <div className="fu" style={{ background: "#fff", border: "1px solid #E5E5E5", borderRadius: 12, padding: 32, width: 500, maxWidth: "92vw", boxShadow: "0 20px 60px rgba(0,0,0,0.1)" }} onClick={e => e.stopPropagation()}>
+          <div className="fu" style={{ background: "#fff", border: "1px solid #E5E5E5", borderRadius: 12, padding: 32, width: 500, maxWidth: "92vw", boxShadow: "0 20px 60px rgba(0,0,0,0.1)", overflowY: "auto", maxHeight: "90vh" }} onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-.02em", color: "#1a1a1a", marginBottom: 24 }}>New contact</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
               <div><label className="lbl">Company *</label><input placeholder="Acme Corp" value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} /></div>
