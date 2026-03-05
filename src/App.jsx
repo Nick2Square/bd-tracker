@@ -363,6 +363,44 @@ export default function App() {
 
   const followupContacts = allActive.filter(c => ownerFilter === "all" ? true : c.owner === currentUser);
 
+  const [authed, setAuthed] = useState(() => sessionStorage.getItem("2st_auth") === "true");
+  const [pwInput, setPwInput] = useState("");
+  const [pwError, setPwError] = useState(false);
+
+  const PASSWORD = "Nickandmaz26";
+
+  const handleLogin = () => {
+    if (pwInput === PASSWORD) {
+      sessionStorage.setItem("2st_auth", "true");
+      setAuthed(true);
+    } else {
+      setPwError(true);
+      setTimeout(() => setPwError(false), 1500);
+    }
+  };
+
+  if (!authed) return (
+    <div style={{ fontFamily: "Cormorant Garamond, Georgia, serif", background: "#FAFAF8", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <style>{css}</style>
+      <div className="fu" style={{ background: "#fff", border: "1px solid #EBEBEB", borderRadius: 12, padding: 40, width: 360, maxWidth: "90vw", boxShadow: "0 20px 60px rgba(0,0,0,0.08)", textAlign: "center" }}>
+        <img src="/logo.png" alt="2Square Talent" style={{ height: 36, width: "auto", marginBottom: 24 }} />
+        <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-.02em", marginBottom: 6 }}>BD Tracker</div>
+        <div className="e" style={{ fontSize: 13, color: "#9CA3AF", marginBottom: 28 }}>Enter your password to continue</div>
+        <input
+          type="password" placeholder="Password" value={pwInput}
+          onChange={e => setPwInput(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && handleLogin()}
+          style={{ marginBottom: 12, textAlign: "center", borderColor: pwError ? "#DC2626" : "#E5E5E5" }}
+          autoFocus
+        />
+        {pwError && <div className="e" style={{ fontSize: 12, color: "#DC2626", marginBottom: 8 }}>Incorrect password</div>}
+        <button className="btn e" style={{ background: "#1a1a1a", color: "#fff", width: "100%", padding: "10px 0" }} onClick={handleLogin}>
+          Enter
+        </button>
+      </div>
+    </div>
+  );
+
   if (loading) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#FAFAF8", flexDirection: "column", gap: 16 }}>
       <style>{css}</style>
