@@ -129,6 +129,124 @@ const OwnerBar = ({ contacts }) => {
   );
 };
 
+
+const CalendarPicker = ({ value, onChange, label }) => {
+  const [open, setOpen] = useState(false);
+  const [viewing, setViewing] = useState(() => value ? new Date(value) : new Date());
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const selected = value ? new Date(value) : null;
+  if (selected) selected.setHours(0,0,0,0);
+
+  const year = viewing.getFullYear();
+  const month = viewing.getMonth();
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const monthName = viewing.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+
+  const blanks = Array(firstDay).fill(null);
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+  const selectDay = (day) => {
+    const d = new Date(year, month, day);
+    const iso = d.toISOString().split("T")[0];
+    onChange(iso);
+    setOpen(false);
+  };
+
+  const prevMonth = () => setViewing(new Date(year, month - 1, 1));
+  const nextMonth = () => setViewing(new Date(year, month + 1, 1));
+
+  const isToday = (day) => {
+    const d = new Date(year, month, day); d.setHours(0,0,0,0);
+    return d.getTime() === today.getTime();
+  };
+  const isSelected = (day) => {
+    if (!selected) return false;
+    const d = new Date(year, month, day); d.setHours(0,0,0,0);
+    return d.getTime() === selected.getTime();
+  };
+  const isPast = (day) => {
+    const d = new Date(year, month, day); d.setHours(0,0,0,0);
+    return d < today;
+  };
+  const isWeekend = (day) => {
+    const dow = new Date(year, month, day).getDay();
+    return dow === 0 || dow === 6;
+  };
+
+  const displayValue = value ? new Date(value).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+
+  return (
+    <div style={{ position: "relative" }}>
+      {label && <label className="lbl">{label}</label>}
+      <div onClick={() => setOpen(!open)} style={{
+        background: "#fff", border: "1px solid #E5E5E5", borderRadius: 6,
+        padding: "9px 12px", cursor: "pointer", fontFamily: "Epilogue, sans-serif",
+        fontSize: 13, color: value ? "#1a1a1a" : "#9CA3AF",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        transition: "border .15s", borderColor: open ? "#1a1a1a" : "#E5E5E5"
+      }}>
+        <span>{displayValue || "Select date"}</span>
+        <span style={{ fontSize: 12, color: "#9CA3AF" }}>📅</span>
+      </div>
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 999,
+          background: "#fff", border: "1px solid #E5E5E5", borderRadius: 10,
+          boxShadow: "0 8px 30px rgba(0,0,0,0.12)", padding: 16, width: 280,
+        }} onClick={e => e.stopPropagation()}>
+          {/* Header */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <button onClick={prevMonth} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 16, color: "#6B7280", padding: "2px 6px" }}>‹</button>
+            <span style={{ fontFamily: "Cormorant Garamond, serif", fontSize: 16, fontWeight: 700 }}>{monthName}</span>
+            <button onClick={nextMonth} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 16, color: "#6B7280", padding: "2px 6px" }}>›</button>
+          </div>
+          {/* Quick shortcuts */}
+          <div style={{ display: "flex", gap: 4, marginBottom: 10, flexWrap: "wrap" }}>
+            {[["Today", 0], ["+3 days", 3], ["Next Mon", null], ["+2 weeks", 14]].map(([l, n]) => (
+              <button key={l} onClick={() => {
+                let d = new Date(today);
+                if (l === "Next Mon") {
+                  const dow = d.getDay();
+                  d.setDate(d.getDate() + (dow === 0 ? 1 : 8 - dow));
+                } else {
+                  d.setDate(d.getDate() + n);
+                }
+                onChange(d.toISOString().split("T")[0]);
+                setViewing(new Date(d));
+                setOpen(false);
+              }} style={{
+                fontFamily: "Epilogue, sans-serif", fontSize: 10, border: "1px solid #E5E5E5",
+                background: "#FAFAF8", borderRadius: 20, padding: "3px 8px", cursor: "pointer", color: "#6B7280"
+              }}>{l}</button>
+            ))}
+          </div>
+          {/* Day headers */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 4 }}>
+            {["Su","Mo","Tu","We","Th","Fr","Sa"].map(d => (
+              <div key={d} style={{ textAlign: "center", fontFamily: "Epilogue, sans-serif", fontSize: 10, color: "#C4C4C4", padding: "2px 0" }}>{d}</div>
+            ))}
+          </div>
+          {/* Days grid */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
+            {blanks.map((_, i) => <div key={`b${i}`} />)}
+            {days.map(day => (
+              <button key={day} onClick={() => !isPast(day) && selectDay(day)} style={{
+                border: "none", borderRadius: 6, padding: "6px 2px", cursor: isPast(day) ? "default" : "pointer",
+                fontFamily: "Epilogue, sans-serif", fontSize: 12, textAlign: "center",
+                background: isSelected(day) ? "#1a1a1a" : isToday(day) ? "#EEF2FF" : "transparent",
+                color: isSelected(day) ? "#fff" : isPast(day) ? "#D1D5DB" : isWeekend(day) ? "#C4C4C4" : "#1a1a1a",
+                fontWeight: isToday(day) || isSelected(day) ? 600 : 400,
+              }}>{day}</button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState("nick");
   const [contacts, setContacts] = useState([]);
@@ -171,7 +289,7 @@ export default function App() {
     setSelected(c.id);
     setLogNote("");
     setLogAction(c.next_action);
-    setLogDue(c.next_due);
+    setLogDue(c.next_due || TODAY);
     setLogStage(c.stage);
   };
 
@@ -300,7 +418,7 @@ export default function App() {
               <div><label className="lbl">What happened?</label><textarea rows={3} placeholder="Quick note on the conversation, email, meeting…" value={logNote} onChange={e => setLogNote(e.target.value)} /></div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div><label className="lbl">Next action</label><input placeholder="e.g. Send deck, follow-up call" value={logAction} onChange={e => setLogAction(e.target.value)} /></div>
-                <div><label className="lbl">Next follow-up date</label><input type="date" value={logDue} onChange={e => setLogDue(e.target.value)} /></div>
+                <CalendarPicker label="Next follow-up date" value={logDue} onChange={setLogDue} />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div><label className="lbl">Stage</label><select value={logStage} onChange={e => setLogStage(e.target.value)}>{STAGES.map(s => <option key={s}>{s}</option>)}</select></div>
@@ -642,7 +760,7 @@ export default function App() {
             <div style={{ marginBottom: 14 }}><label className="lbl">Note</label><textarea rows={2} placeholder="How did you meet / context…" value={form.last_note} onChange={e => setForm({ ...form, last_note: e.target.value })} /></div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 28 }}>
               <div><label className="lbl">Next action</label><input placeholder="Send deck, call…" value={form.next_action} onChange={e => setForm({ ...form, next_action: e.target.value })} /></div>
-              <div><label className="lbl">Follow-up date *</label><input type="date" value={form.next_due} onChange={e => setForm({ ...form, next_due: e.target.value })} /></div>
+              <CalendarPicker label="Follow-up date *" value={form.next_due} onChange={v => setForm({ ...form, next_due: v })} />
             </div>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <button className="btn ghost e" onClick={() => setShowAdd(false)}>Cancel</button>
