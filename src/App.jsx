@@ -58,7 +58,11 @@ const urgency = (dueDate) => {
 
 const URG_DOT = { overdue: "#DC2626", today: "#D97706", soon: "#CA8A04", ok: "#D1D5DB" };
 const URG_TEXT = { overdue: "#DC2626", today: "#D97706", soon: "#CA8A04", ok: "#6B7280" };
-const TODAY = new Date().toISOString().split("T")[0];
+const toLocalISO = (d) => {
+  const pad = n => String(n).padStart(2, "0");
+  return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+};
+const TODAY = toLocalISO(new Date());
 const fmtDateLong = (d) => new Date(d).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "long", year: "numeric" });
 
 const EMPTY = { company: "", contact: "", phone: "", email: "", last_touch: TODAY, last_note: "", next_action: "", next_due: "", stage: "Outreach", owner: "nick" };
@@ -162,7 +166,7 @@ const CalendarPicker = ({ value, onChange, label }) => {
 
   const selectDay = (day) => {
     const d = new Date(year, month, day);
-    const iso = d.toISOString().split("T")[0];
+    const iso = toLocalISO(d);
     onChange(iso);
     setOpen(false);
   };
@@ -226,7 +230,7 @@ const CalendarPicker = ({ value, onChange, label }) => {
                 } else {
                   d.setDate(d.getDate() + n);
                 }
-                onChange(d.toISOString().split("T")[0]);
+                onChange(toLocalISO(d));
                 setViewing(new Date(d));
                 setOpen(false);
               }} style={{
