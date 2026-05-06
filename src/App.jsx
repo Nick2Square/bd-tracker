@@ -667,6 +667,102 @@ function PipelineView({contacts, currentUser, onOpen, onGoToCompany}) {
 }
 
 
+// ── LOG TOUCHPOINT MODAL (portal — renders outside App stacking context) ──────
+
+function LogModal({company, contacts, currentUser, pacing, onClose, onSaved}) {
+  const u = USERS[currentUser] || USERS.nick;
+  const [ln, setLn] = useState("");
+  const [la, setLa] = useState("");
+  const [ld, setLd] = useState(addDays(TODAY, 30));
+  const [ls, setLs] = useState(company.contacts[0]?.stage || "Outreach");
+  const [lt, setLt] = useState("note");
+  const [selId, setSelId] = useState(company.contacts[0]?.id || null);
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    const targetId = selId || company.contacts[0]?.id;
+    if (targetId) {
+      const c = contacts.find(x => x.id === targetId) || company.contacts[0];
+      const entry = {date:TODAY, note:ln, action:la, stage:ls, type:lt, by:currentUser};
+      await supabase.from("contacts").update({
+        last_note: ln, last_touch: TODAY, next_action: la, next_due: ld,
+        history: [...(c?.history||[]), entry],
+      }).eq("id", targetId);
+      if (ls) await Promise.all(company.contacts.map(con =>
+        supabase.from("contacts").update({stage: ls}).eq("id", con.id)
+      ));
+    }
+    setSaving(false);
+    onSaved();
+  };
+
+  return createPortal(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000}} onMouseDown={onClose}>
+      <div style={{background:"#fff",borderRadius:12,padding:32,width:560,maxWidth:"94vw",boxShadow:"0 24px 64px rgba(0,0,0,0.18)",overflowY:"auto",maxHeight:"90vh",fontFamily:"Cormorant Garamond,Georgia,serif"}} onMouseDown={e=>e.stopPropagation()}>
+        <style>{`
+          .lml{font-family:'Epilogue',sans-serif;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#9CA3AF;display:block;margin-bottom:5px;}
+          .lmi{background:#fff;border:1px solid #E5E5E5;color:#1a1a1a;font-family:'Epilogue',sans-serif;font-size:13px;padding:9px 12px;border-radius:6px;width:100%;outline:none;}
+          .lmi:focus{border-color:#1a1a1a;}
+        `}</style>
+        <div style={{fontSize:22,fontWeight:700,letterSpacing:"-.02em",color:"#1a1a1a",marginBottom:4}}>Log touchpoint</div>
+        <div style={{fontFamily:"Epilogue,sans-serif",fontSize:13,color:"#9CA3AF",marginBottom:24}}>{company.name} · saving as {u.name}</div>
+
+        <div style={{marginBottom:14}}>
+          <label className="lml">Contact</label>
+          <select className="lmi" value={selId||""} onChange={e=>setSelId(e.target.value?parseInt(e.target.value):null)}>
+            <option value="">Company-wide</option>
+            {company.contacts.map(c=><option key={c.id} value={c.id}>{c.contact||c.company}</option>)}
+          </select>
+        </div>
+
+        <div style={{marginBottom:14}}>
+          <label className="lml">Activity type</label>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {ACTIVITY_TYPES.map(a=>(
+              <button key={a.value} onMouseDown={()=>setLt(a.value)} style={{border:`1px solid ${lt===a.value?"#1a1a1a":"#E5E5E5"}`,background:lt===a.value?"#1a1a1a":"#fff",color:lt===a.value?"#fff":"#6B7280",borderRadius:20,padding:"5px 14px",fontSize:12,fontFamily:"Epilogue,sans-serif",cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+                <span>{a.icon}</span>{a.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{display:"grid",gap:12,marginBottom:20}}>
+          <div>
+            <label className="lml">What happened?</label>
+            <textarea className="lmi" rows={3} placeholder="Notes from the call, email, meeting…" value={ln} onChange={e=>setLn(e.target.value)} style={{resize:"vertical"}}/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div>
+              <label className="lml">Next action</label>
+              <input className="lmi" placeholder="e.g. Send proposal" value={la} onChange={e=>setLa(e.target.value)}/>
+            </div>
+            <CalPicker label="Next follow-up" value={ld} onChange={setLd}/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div>
+              <label className="lml">Move to stage</label>
+              <select className="lmi" value={ls} onChange={e=>setLs(e.target.value)}>
+                {STAGES.map(s=><option key={s}>{s}</option>)}
+              </select>
+              <div style={{fontFamily:"Epilogue,sans-serif",fontSize:10,color:"#9CA3AF",marginTop:4}}>Updates all contacts at this company</div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <button onMouseDown={onClose} style={{border:"1px solid #E5E5E5",background:"none",color:"#6B7280",fontFamily:"Epilogue,sans-serif",fontSize:12,padding:"9px 18px",borderRadius:6,cursor:"pointer"}}>Cancel</button>
+          <button onMouseDown={save} disabled={saving} style={{border:"none",background:u.color,color:"#fff",fontFamily:"Epilogue,sans-serif",fontSize:12,padding:"9px 18px",borderRadius:6,cursor:saving?"default":"pointer",opacity:saving?0.6:1}}>
+            {saving?"Saving…":"Save touchpoint"}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+
 const EMPTY = {company:"",contact:"",phone:"",email:"",linkedin:"",website:"",industry:"",company_size:"",deal_value:"",last_touch:TODAY,last_note:"",next_action:"",next_due:"",stage:"Outreach",owner:"nick",tags:[],archived:false,follow_up_interval:""};
 
 export default function App() {
@@ -1099,67 +1195,7 @@ export default function App() {
           </div>
         </div>
       )}
-      {/* COMPANY LOG MODAL */}
-      {logCompany&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}} onClick={()=>setLogCompany(null)}>
-          <div style={{background:"#fff",border:"1px solid #E5E5E5",borderRadius:12,padding:32,width:560,maxWidth:"94vw",boxShadow:"0 20px 60px rgba(0,0,0,0.12)",overflowY:"auto",maxHeight:"92vh",position:"relative",zIndex:1001}} onClick={e=>e.stopPropagation()}>
-            <div style={{fontSize:22,fontWeight:700,letterSpacing:"-.02em",color:"#1a1a1a",marginBottom:4}}>Log touchpoint</div>
-            <div className="e" style={{fontSize:13,color:"#9CA3AF",marginBottom:24}}>{logCompany.name} · saving as {u.name}</div>
-
-            <div style={{marginBottom:14}}>
-              <label className="lbl">Contact</label>
-              <select value={logCompany.selectedContactId||""} onChange={e=>setLogCompany({...logCompany,selectedContactId:e.target.value?parseInt(e.target.value):null})}>
-                <option value="">Company-wide (no specific contact)</option>
-                {logCompany.contacts.map(c=><option key={c.id} value={c.id}>{c.contact||c.company}</option>)}
-              </select>
-            </div>
-
-            <div style={{marginBottom:14}}>
-              <label className="lbl">Activity type</label>
-              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                {ACTIVITY_TYPES.map(a=><button key={a.value} onClick={()=>setLt(a.value)} style={{border:`1px solid ${lt===a.value?"#1a1a1a":"#E5E5E5"}`,background:lt===a.value?"#1a1a1a":"#fff",color:lt===a.value?"#fff":"#6B7280",borderRadius:20,padding:"5px 14px",fontSize:12,fontFamily:"Epilogue,sans-serif",cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><span>{a.icon}</span>{a.label}</button>)}
-              </div>
-            </div>
-
-            <div style={{display:"grid",gap:12,marginBottom:14}}>
-              <div><label className="lbl">What happened?</label><textarea rows={3} placeholder="Notes from the call, email, meeting…" value={ln} onChange={e=>setLn(e.target.value)}/></div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-                <div><label className="lbl">Next action</label><input placeholder="e.g. Send proposal" value={la} onChange={e=>setLa(e.target.value)}/></div>
-                <CalPicker label="Next follow-up" value={ld} onChange={setLd}/>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-                <div>
-                  <label className="lbl">Move to stage</label>
-                  <select value={ls} onChange={e=>setLs(e.target.value)}>{STAGES.map(s=><option key={s}>{s}</option>)}</select>
-                  <div className="e" style={{fontSize:10,color:"#9CA3AF",marginTop:4}}>Updates all contacts under this company</div>
-                </div>
-              </div>
-            </div>
-
-            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-              <button className="btn ghost e" onClick={()=>setLogCompany(null)}>Cancel</button>
-              <button className="btn e" style={{background:u.color,color:"#fff",opacity:saving?0.6:1}} disabled={saving} onClick={async()=>{
-                setSaving(true);
-                const targetId = logCompany.selectedContactId || logCompany.contacts[0]?.id;
-                if(targetId){
-                  const c = contacts.find(x=>x.id===targetId)||logCompany.contacts[0];
-                  const newEntry = {date:TODAY,note:ln,action:la,stage:ls,type:lt,by:cu};
-                  await supabase.from("contacts").update({
-                    last_note:ln, last_touch:TODAY, next_action:la, next_due:ld,
-                    history:[...(c?.history||[]),newEntry],
-                  }).eq("id",targetId);
-                  // Update stage on ALL contacts in this company
-                  if(ls) await Promise.all(logCompany.contacts.map(con=>
-                    supabase.from("contacts").update({stage:ls}).eq("id",con.id)
-                  ));
-                }
-                await fetchData();
-                setSaving(false); setLogCompany(null); setLn(""); setLa(""); setLd("");
-              }}>{saving?"Saving…":"Save touchpoint"}</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {logCompany&&<LogModal company={logCompany} contacts={contacts} currentUser={cu} pacing={pacing} onClose={()=>setLogCompany(null)} onSaved={async()=>{await fetchData();setLogCompany(null);}}/>}
     </div>
   );
 }
