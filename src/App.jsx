@@ -1065,8 +1065,8 @@ export default function App() {
       {page==="settings"&&<SettingsView pacing={pacing} onSave={savePacingState}/>}
 
       {showAdd&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100}} onClick={()=>setShowAdd(false)}>
-          <div className="fu" style={{background:"#fff",border:"1px solid #E5E5E5",borderRadius:12,padding:32,width:600,maxWidth:"94vw",boxShadow:"0 20px 60px rgba(0,0,0,0.12)",overflowY:"auto",maxHeight:"92vh"}} onClick={e=>e.stopPropagation()}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}} onClick={()=>setShowAdd(false)}>
+          <div style={{background:"#fff",border:"1px solid #E5E5E5",borderRadius:12,padding:32,width:600,maxWidth:"94vw",boxShadow:"0 20px 60px rgba(0,0,0,0.12)",overflowY:"auto",maxHeight:"92vh",position:"relative",zIndex:1001}} onClick={e=>e.stopPropagation()}>
             <div style={{fontSize:26,fontWeight:700,letterSpacing:"-.02em",color:"#1a1a1a",marginBottom:6}}>{showAdd==="company"?"🏢 New company":"👤 New contact"}</div>
             <div className="e" style={{fontSize:12,color:"#9CA3AF",marginBottom:24}}>Fields marked * are required</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
@@ -1101,8 +1101,8 @@ export default function App() {
       )}
       {/* COMPANY LOG MODAL */}
       {logCompany&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100}} onClick={()=>setLogCompany(null)}>
-          <div className="fu" style={{background:"#fff",border:"1px solid #E5E5E5",borderRadius:12,padding:32,width:560,maxWidth:"94vw",boxShadow:"0 20px 60px rgba(0,0,0,0.12)",overflowY:"auto",maxHeight:"90vh"}} onClick={e=>e.stopPropagation()}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}} onClick={()=>setLogCompany(null)}>
+          <div style={{background:"#fff",border:"1px solid #E5E5E5",borderRadius:12,padding:32,width:560,maxWidth:"94vw",boxShadow:"0 20px 60px rgba(0,0,0,0.12)",overflowY:"auto",maxHeight:"92vh",position:"relative",zIndex:1001}} onClick={e=>e.stopPropagation()}>
             <div style={{fontSize:22,fontWeight:700,letterSpacing:"-.02em",color:"#1a1a1a",marginBottom:4}}>Log touchpoint</div>
             <div className="e" style={{fontSize:13,color:"#9CA3AF",marginBottom:24}}>{logCompany.name} · saving as {u.name}</div>
 
