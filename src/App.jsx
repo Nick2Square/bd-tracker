@@ -698,8 +698,8 @@ function LogModal({company, contacts, currentUser, pacing, onClose, onSaved}) {
   };
 
   return createPortal(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000}} onMouseDown={onClose}>
-      <div style={{background:"#fff",borderRadius:12,padding:32,width:560,maxWidth:"94vw",boxShadow:"0 24px 64px rgba(0,0,0,0.18)",overflowY:"auto",maxHeight:"90vh",fontFamily:"Cormorant Garamond,Georgia,serif"}} onMouseDown={e=>e.stopPropagation()}>
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000}} onClick={onClose}>
+      <div style={{background:"#fff",borderRadius:12,padding:32,width:560,maxWidth:"94vw",boxShadow:"0 24px 64px rgba(0,0,0,0.18)",overflowY:"auto",maxHeight:"90vh",fontFamily:"Cormorant Garamond,Georgia,serif"}} onClick={e=>e.stopPropagation()}>
         <style>{`
           .lml{font-family:'Epilogue',sans-serif;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#9CA3AF;display:block;margin-bottom:5px;}
           .lmi{background:#fff;border:1px solid #E5E5E5;color:#1a1a1a;font-family:'Epilogue',sans-serif;font-size:13px;padding:9px 12px;border-radius:6px;width:100%;outline:none;}
@@ -720,7 +720,7 @@ function LogModal({company, contacts, currentUser, pacing, onClose, onSaved}) {
           <label className="lml">Activity type</label>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
             {ACTIVITY_TYPES.map(a=>(
-              <button key={a.value} onMouseDown={()=>setLt(a.value)} style={{border:`1px solid ${lt===a.value?"#1a1a1a":"#E5E5E5"}`,background:lt===a.value?"#1a1a1a":"#fff",color:lt===a.value?"#fff":"#6B7280",borderRadius:20,padding:"5px 14px",fontSize:12,fontFamily:"Epilogue,sans-serif",cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+              <button key={a.value} onClick={()=>setLt(a.value)} style={{border:`1px solid ${lt===a.value?"#1a1a1a":"#E5E5E5"}`,background:lt===a.value?"#1a1a1a":"#fff",color:lt===a.value?"#fff":"#6B7280",borderRadius:20,padding:"5px 14px",fontSize:12,fontFamily:"Epilogue,sans-serif",cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
                 <span>{a.icon}</span>{a.label}
               </button>
             ))}
@@ -751,8 +751,8 @@ function LogModal({company, contacts, currentUser, pacing, onClose, onSaved}) {
         </div>
 
         <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-          <button onMouseDown={onClose} style={{border:"1px solid #E5E5E5",background:"none",color:"#6B7280",fontFamily:"Epilogue,sans-serif",fontSize:12,padding:"9px 18px",borderRadius:6,cursor:"pointer"}}>Cancel</button>
-          <button onMouseDown={save} disabled={saving} style={{border:"none",background:u.color,color:"#fff",fontFamily:"Epilogue,sans-serif",fontSize:12,padding:"9px 18px",borderRadius:6,cursor:saving?"default":"pointer",opacity:saving?0.6:1}}>
+          <button onClick={onClose} style={{border:"1px solid #E5E5E5",background:"none",color:"#6B7280",fontFamily:"Epilogue,sans-serif",fontSize:12,padding:"9px 18px",borderRadius:6,cursor:"pointer"}}>Cancel</button>
+          <button onClick={save} disabled={saving} style={{border:"none",background:u.color,color:"#fff",fontFamily:"Epilogue,sans-serif",fontSize:12,padding:"9px 18px",borderRadius:6,cursor:saving?"default":"pointer",opacity:saving?0.6:1}}>
             {saving?"Saving…":"Save touchpoint"}
           </button>
         </div>
