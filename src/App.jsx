@@ -596,27 +596,36 @@ function CleanupView({ contacts, onDone }) {
 
       {fixing && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,backdropFilter:"blur(4px)"}} onClick={() => setFixing(null)}>
-          <div className="fu" style={{background:"#fff",border:"1px solid #E5E5E5",borderRadius:12,padding:32,width:480,maxWidth:"94vw",boxShadow:"0 20px 60px rgba(0,0,0,0.12)"}} onClick={e=>e.stopPropagation()}>
-            <div style={{fontSize:22,fontWeight:700,letterSpacing:"-.02em",color:"#1a1a1a",marginBottom:6}}>Fix this entry</div>
-            <div className="e" style={{fontSize:13,color:"#9CA3AF",marginBottom:24}}>Move the name to the contact field and assign a real company</div>
+          <div className="fu" style={{background:"#fff",border:"1px solid #E5E5E5",borderRadius:12,padding:32,width:500,maxWidth:"94vw",boxShadow:"0 20px 60px rgba(0,0,0,0.12)"}} onClick={e=>e.stopPropagation()}>
+            <div style={{fontSize:22,fontWeight:700,letterSpacing:"-.02em",color:"#1a1a1a",marginBottom:4}}>Who does this person work at?</div>
+            <div className="e" style={{fontSize:13,color:"#9CA3AF",marginBottom:24}}><strong style={{color:"#1a1a1a"}}>{fixing.company}</strong> will become a contact — pick their company below</div>
 
-            <div style={{background:"#F8F8F6",borderRadius:8,padding:"14px 16px",marginBottom:20}}>
-              <div className="e" style={{fontSize:11,letterSpacing:".1em",textTransform:"uppercase",color:"#9CA3AF",marginBottom:8}}>Will become</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-                <div><div className="lbl" style={{marginBottom:3}}>Contact name</div><div style={{fontSize:14,fontWeight:600,color:"#1a1a1a",padding:"8px 12px",background:"#fff",border:"1px solid #E5E5E5",borderRadius:6}}>{fixing.company}</div></div>
+            <div style={{marginBottom:20}}>
+              <label className="lbl">Which company does {fixing.company} work at? *</label>
+              <input
+                list="company-list"
+                placeholder="e.g. Commbank Connect"
+                value={newCompany}
+                onChange={e => setNewCompany(e.target.value)}
+                autoFocus
+                style={{fontSize:14}}
+              />
+              <datalist id="company-list">
+                {companies.map(co => <option key={co} value={co} />)}
+              </datalist>
+              <div className="e" style={{fontSize:11,color:"#9CA3AF",marginTop:6}}>Type a new company name or pick an existing one from the list</div>
+            </div>
+
+            <div style={{background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:8,padding:"12px 16px",marginBottom:24}}>
+              <div className="e" style={{fontSize:12,color:"#15803D",marginBottom:6,fontWeight:500}}>After fixing, this row will be:</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                 <div>
-                  <div className="lbl" style={{marginBottom:3}}>Company *</div>
-                  <input
-                    list="company-list"
-                    placeholder="Type or pick a company…"
-                    value={newCompany}
-                    onChange={e => setNewCompany(e.target.value)}
-                    autoFocus
-                    style={{fontSize:14}}
-                  />
-                  <datalist id="company-list">
-                    {companies.map(co => <option key={co} value={co} />)}
-                  </datalist>
+                  <div className="e" style={{fontSize:10,color:"#15803D",letterSpacing:".08em",textTransform:"uppercase",marginBottom:2}}>Company</div>
+                  <div className="e" style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{newCompany||"(company name)"}</div>
+                </div>
+                <div>
+                  <div className="e" style={{fontSize:10,color:"#15803D",letterSpacing:".08em",textTransform:"uppercase",marginBottom:2}}>Contact name</div>
+                  <div className="e" style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{fixing.company}</div>
                 </div>
               </div>
             </div>
