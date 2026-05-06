@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -219,57 +220,71 @@ const CalPicker = ({value,onChange,label}) => {
   const [open,setOpen]=useState(false);
   const [view,setView]=useState(()=>value?new Date(value):new Date());
   const [pos,setPos]=useState({top:0,left:0});
-  const ref=useRef(null);
+  const triggerRef=useRef(null);
+  const calRef=useRef(null);
+
   const openIt=()=>{
-    if(ref.current){const r=ref.current.getBoundingClientRect();const sb=window.innerHeight-r.bottom;setPos({top:sb>360?r.bottom+6:r.top-366,left:Math.min(r.left,window.innerWidth-296)});}
+    if(triggerRef.current){
+      const r=triggerRef.current.getBoundingClientRect();
+      const sb=window.innerHeight-r.bottom;
+      setPos({top:sb>300?r.bottom+6:r.top-306,left:Math.min(r.left,window.innerWidth-296)});
+    }
     setOpen(o=>!o);
   };
+
   useEffect(()=>{
     if(!open) return;
-    const close=e=>{if(!ref.current?.contains(e.target))setOpen(false);};
+    const close=e=>{
+      if(!triggerRef.current?.contains(e.target)&&!calRef.current?.contains(e.target))
+        setOpen(false);
+    };
     document.addEventListener("mousedown",close);
     return()=>document.removeEventListener("mousedown",close);
   },[open]);
+
   const today=new Date();today.setHours(0,0,0,0);
   const sel=value?(()=>{const d=new Date(value);d.setHours(0,0,0,0);return d;})():null;
   const yr=view.getFullYear(),mo=view.getMonth();
   const fd=new Date(yr,mo,1).getDay();
   const dim=new Date(yr,mo+1,0).getDate();
+
+  const calendar = open ? createPortal(
+    <div ref={calRef} style={{position:"fixed",top:pos.top,left:pos.left,zIndex:99999,background:"#fff",border:"1px solid #E5E5E5",borderRadius:10,boxShadow:"0 8px 30px rgba(0,0,0,0.18)",padding:16,width:280}} onMouseDown={e=>e.stopPropagation()}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <button onClick={()=>setView(new Date(yr,mo-1,1))} style={{border:"none",background:"none",cursor:"pointer",fontSize:16,color:"#6B7280",padding:"2px 6px"}}>‹</button>
+        <span style={{fontFamily:"Cormorant Garamond,serif",fontSize:16,fontWeight:700}}>{view.toLocaleDateString("en-GB",{month:"long",year:"numeric"})}</span>
+        <button onClick={()=>setView(new Date(yr,mo+1,1))} style={{border:"none",background:"none",cursor:"pointer",fontSize:16,color:"#6B7280",padding:"2px 6px"}}>›</button>
+      </div>
+      <div style={{display:"flex",gap:4,marginBottom:10,flexWrap:"wrap"}}>
+        {[["Today",0],["+3d",3],["Next Mon",null],["+2wk",14]].map(([l,n])=>(
+          <button key={l} onClick={()=>{let d=new Date(today);if(l==="Next Mon"){const dw=d.getDay();d.setDate(d.getDate()+(dw===0?1:8-dw));}else d.setDate(d.getDate()+n);onChange(toLocalISO(d));setView(new Date(d));setOpen(false);}} style={{fontFamily:"Epilogue,sans-serif",fontSize:10,border:"1px solid #E5E5E5",background:"#FAFAF8",borderRadius:20,padding:"3px 8px",cursor:"pointer",color:"#6B7280"}}>{l}</button>
+        ))}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}}>
+        {["Su","Mo","Tu","We","Th","Fr","Sa"].map(d=><div key={d} style={{textAlign:"center",fontFamily:"Epilogue,sans-serif",fontSize:10,color:"#C4C4C4",padding:"2px 0"}}>{d}</div>)}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
+        {Array(fd).fill(null).map((_,i)=><div key={"b"+i}/>)}
+        {Array.from({length:dim},(_,i)=>i+1).map(day=>{
+          const d=new Date(yr,mo,day);d.setHours(0,0,0,0);
+          const isSel=sel&&d.getTime()===sel.getTime();
+          const isT=d.getTime()===today.getTime();
+          const isPast=d<today;
+          const isW=d.getDay()===0||d.getDay()===6;
+          return <button key={day} onClick={()=>!isPast&&(onChange(toLocalISO(new Date(yr,mo,day))),setOpen(false))} style={{border:"none",borderRadius:6,padding:"6px 2px",cursor:isPast?"default":"pointer",fontFamily:"Epilogue,sans-serif",fontSize:12,textAlign:"center",background:isSel?"#1a1a1a":isT?"#EEF2FF":"transparent",color:isSel?"#fff":isPast?"#D1D5DB":isW?"#C4C4C4":"#1a1a1a",fontWeight:isT||isSel?600:400}}>{day}</button>;
+        })}
+      </div>
+    </div>,
+    document.body
+  ) : null;
+
   return (
     <div style={{position:"relative"}}>
       {label&&<label className="lbl">{label}</label>}
-      <div ref={ref} onClick={openIt} style={{background:"#fff",border:"1px solid #E5E5E5",borderRadius:6,padding:"9px 12px",cursor:"pointer",fontFamily:"Epilogue,sans-serif",fontSize:13,color:value?"#1a1a1a":"#9CA3AF",display:"flex",alignItems:"center",justifyContent:"space-between",borderColor:open?"#1a1a1a":"#E5E5E5",transition:"border .15s"}}>
+      <div ref={triggerRef} onClick={openIt} style={{background:"#fff",border:"1px solid #E5E5E5",borderRadius:6,padding:"9px 12px",cursor:"pointer",fontFamily:"Epilogue,sans-serif",fontSize:13,color:value?"#1a1a1a":"#9CA3AF",display:"flex",alignItems:"center",justifyContent:"space-between",borderColor:open?"#1a1a1a":"#E5E5E5",transition:"border .15s"}}>
         <span>{value?fmtS(value):"Select date"}</span><span style={{fontSize:12,color:"#9CA3AF"}}>📅</span>
       </div>
-      {open&&(
-        <div style={{position:"fixed",top:pos.top,left:pos.left,zIndex:9999,background:"#fff",border:"1px solid #E5E5E5",borderRadius:10,boxShadow:"0 8px 30px rgba(0,0,0,0.12)",padding:16,width:280}} onClick={e=>e.stopPropagation()}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-            <button onClick={()=>setView(new Date(yr,mo-1,1))} style={{border:"none",background:"none",cursor:"pointer",fontSize:16,color:"#6B7280",padding:"2px 6px"}}>‹</button>
-            <span style={{fontFamily:"Cormorant Garamond,serif",fontSize:16,fontWeight:700}}>{view.toLocaleDateString("en-GB",{month:"long",year:"numeric"})}</span>
-            <button onClick={()=>setView(new Date(yr,mo+1,1))} style={{border:"none",background:"none",cursor:"pointer",fontSize:16,color:"#6B7280",padding:"2px 6px"}}>›</button>
-          </div>
-          <div style={{display:"flex",gap:4,marginBottom:10,flexWrap:"wrap"}}>
-            {[["Today",0],["+3d",3],["Next Mon",null],["+2wk",14]].map(([l,n])=>(
-              <button key={l} onClick={()=>{let d=new Date(today);if(l==="Next Mon"){const dw=d.getDay();d.setDate(d.getDate()+(dw===0?1:8-dw));}else d.setDate(d.getDate()+n);onChange(toLocalISO(d));setView(new Date(d));setOpen(false);}} style={{fontFamily:"Epilogue,sans-serif",fontSize:10,border:"1px solid #E5E5E5",background:"#FAFAF8",borderRadius:20,padding:"3px 8px",cursor:"pointer",color:"#6B7280"}}>{l}</button>
-            ))}
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}}>
-            {["Su","Mo","Tu","We","Th","Fr","Sa"].map(d=><div key={d} style={{textAlign:"center",fontFamily:"Epilogue,sans-serif",fontSize:10,color:"#C4C4C4",padding:"2px 0"}}>{d}</div>)}
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
-            {Array(fd).fill(null).map((_,i)=><div key={`b${i}`}/>)}
-            {Array.from({length:dim},(_,i)=>i+1).map(day=>{
-              const d=new Date(yr,mo,day);d.setHours(0,0,0,0);
-              const isSel=sel&&d.getTime()===sel.getTime();
-              const isT=d.getTime()===today.getTime();
-              const isPast=d<today;
-              const isW=d.getDay()===0||d.getDay()===6;
-              return <button key={day} onClick={()=>!isPast&&(onChange(toLocalISO(new Date(yr,mo,day))),setOpen(false))} style={{border:"none",borderRadius:6,padding:"6px 2px",cursor:isPast?"default":"pointer",fontFamily:"Epilogue,sans-serif",fontSize:12,textAlign:"center",background:isSel?"#1a1a1a":isT?"#EEF2FF":"transparent",color:isSel?"#fff":isPast?"#D1D5DB":isW?"#C4C4C4":"#1a1a1a",fontWeight:isT||isSel?600:400}}>{day}</button>;
-            })}
-          </div>
-        </div>
-      )}
-
+      {calendar}
     </div>
   );
 };
@@ -372,8 +387,9 @@ function ProfileEditor({contact:c,onSave,saving,pacing}) {
   );
 }
 
-function CompanyCard({company, onOpen, onLogTouchpoint, allContacts, pacing}) {
+function CompanyCard({company, onOpen, onLogTouchpoint, allContacts, pacing, onStageChange}) {
   const [exp, setExp] = useState(false);
+  const [stageSaving, setStageSaving] = useState(false);
   const ws = company.contacts.map(c => c.website).find(Boolean);
 
   // Merge all history from all contacts under this company, sorted newest first
@@ -381,18 +397,29 @@ function CompanyCard({company, onOpen, onLogTouchpoint, allContacts, pacing}) {
     .flatMap(c => (c.history||[]).map(h => ({...h, contactName: c.contact||c.company, contactId: c.id})))
     .sort((a,b) => new Date(b.date) - new Date(a.date));
 
-  // Most recent stage across contacts
-  const latestStage = company.contacts.slice().sort((a,b) => new Date(b.last_touch||0) - new Date(a.last_touch||0))[0]?.stage;
+  // Company stage = most recently touched contact's stage
+  const currentStage = company.contacts.slice().sort((a,b) => new Date(b.last_touch||0) - new Date(a.last_touch||0))[0]?.stage || "Outreach";
   const latestDue = company.contacts.map(c=>c.next_due).filter(Boolean).sort()[0];
+
+  const handleStageChange = async (e) => {
+    e.stopPropagation();
+    const newStage = e.target.value;
+    setStageSaving(true);
+    // Update ALL contacts under this company to the new stage
+    await Promise.all(company.contacts.map(c =>
+      supabase.from("contacts").update({stage: newStage}).eq("id", c.id)
+    ));
+    setStageSaving(false);
+    onStageChange();
+  };
 
   return (
     <div style={{background:"#fff",border:"1px solid #EBEBEB",borderRadius:10,marginBottom:10,overflow:"hidden"}}>
       {/* Header row */}
-      <div style={{padding:"16px 24px",display:"grid",gridTemplateColumns:"1fr 120px 120px 140px 40px",gap:16,alignItems:"center",cursor:"pointer",transition:"background .12s"}}
+      <div style={{padding:"14px 24px",display:"grid",gridTemplateColumns:"1fr 120px 120px 200px 40px",gap:16,alignItems:"center",transition:"background .12s"}}
         onMouseEnter={e=>e.currentTarget.style.background="#F7F7F5"}
-        onMouseLeave={e=>e.currentTarget.style.background="#fff"}
-        onClick={()=>setExp(o=>!o)}>
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
+        onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
+        <div style={{display:"flex",alignItems:"center",gap:12,cursor:"pointer"}} onClick={()=>setExp(o=>!o)}>
           <div style={{width:38,height:38,borderRadius:"50%",background:"#F3F4F6",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1px solid #EBEBEB"}}>
             <span style={{fontSize:16,fontWeight:700,color:"#6B7280"}}>{company.name?.[0]||"?"}</span>
           </div>
@@ -406,8 +433,24 @@ function CompanyCard({company, onOpen, onLogTouchpoint, allContacts, pacing}) {
         </div>
         <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{[...new Set(company.contacts.map(c=>c.owner))].map(o=><OwnerPill key={o} userId={o}/>)}</div>
         <div className="e" style={{fontSize:13,fontWeight:600,color:company.tv>0?"#15803D":"#D1D5DB"}}>{company.tv>0?fmtC(company.tv):"—"}</div>
-        <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{latestStage&&<SBadge stage={latestStage}/>}{latestDue&&<UBadge due={latestDue}/>}</div>
-        <div style={{fontSize:14,color:"#9CA3AF",textAlign:"center",transition:"transform .2s",transform:exp?"rotate(180deg)":"rotate(0deg)"}}>▾</div>
+        <div style={{display:"flex",alignItems:"center",gap:8}} onClick={e=>e.stopPropagation()}>
+          <select
+            value={currentStage}
+            onChange={handleStageChange}
+            disabled={stageSaving}
+            style={{
+              fontSize:11, fontFamily:"Epilogue,sans-serif", fontWeight:500,
+              padding:"4px 10px", borderRadius:20, cursor:"pointer",
+              border:`1px solid ${STAGE_COLORS[currentStage]?.text||"#9CA3AF"}40`,
+              background:STAGE_COLORS[currentStage]?.bg||"#F1F5F9",
+              color:STAGE_COLORS[currentStage]?.text||"#475569",
+              opacity:stageSaving?.6:1, width:"100%",
+            }}>
+            {STAGES.map(s=><option key={s} value={s}>{s}</option>)}
+          </select>
+          {latestDue&&<UBadge due={latestDue}/>}
+        </div>
+        <div style={{fontSize:14,color:"#9CA3AF",textAlign:"center",transition:"transform .2s",transform:exp?"rotate(180deg)":"rotate(0deg)",cursor:"pointer"}} onClick={()=>setExp(o=>!o)}>▾</div>
       </div>
 
       {exp&&(
@@ -465,7 +508,6 @@ function CompanyCard({company, onOpen, onLogTouchpoint, allContacts, pacing}) {
                       </div>
                       <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>
                         <OwnerPill userId={c.owner}/>
-                        <SBadge stage={c.stage}/>
                       </div>
                     </div>
                     {c.next_action&&<div className="e" style={{fontSize:11,color:"#9CA3AF",marginTop:4}}>→ {c.next_action}</div>}
@@ -483,7 +525,7 @@ function CompanyCard({company, onOpen, onLogTouchpoint, allContacts, pacing}) {
 
 
 
-function CompaniesView({contacts, onOpen, onLogTouchpoint, pacing}) {
+function CompaniesView({contacts, onOpen, onLogTouchpoint, pacing, onRefresh}) {
   const [search, setSearch] = useState("");
   const [stageF, setStageF] = useState("All");
 
@@ -517,7 +559,7 @@ function CompaniesView({contacts, onOpen, onLogTouchpoint, pacing}) {
         <span>Company</span><span>Owner</span><span>Value</span><span>Stage / Due</span><span/>
       </div>
       {list.length===0&&<EmptyState title="No companies found."/>}
-      {list.map(co=><CompanyCard key={co.name} company={co} onOpen={onOpen} onLogTouchpoint={onLogTouchpoint} allContacts={contacts} pacing={pacing}/>)}
+      {list.map(co=><CompanyCard key={co.name} company={co} onOpen={onOpen} onLogTouchpoint={onLogTouchpoint} allContacts={contacts} pacing={pacing} onStageChange={onRefresh}/>)}
     </div>
   );
 }
@@ -1018,7 +1060,7 @@ export default function App() {
         </div>
       )}
 
-      {page==="companies"&&<CompaniesView contacts={allA} onOpen={open} onLogTouchpoint={openCompanyLog} pacing={pacing}/>}
+      {page==="companies"&&<CompaniesView contacts={allA} onOpen={open} onLogTouchpoint={openCompanyLog} pacing={pacing} onRefresh={fetch}/>}
       {page==="pipeline"&&<PipelineView contacts={contacts} currentUser={cu} onOpen={open} onGoToCompany={name=>{setPage("companies");}}/>}
       {page==="settings"&&<SettingsView pacing={pacing} onSave={savePacingState}/>}
 
@@ -1087,8 +1129,9 @@ export default function App() {
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                 <div>
-                  <label className="lbl">Stage</label>
+                  <label className="lbl">Move to stage</label>
                   <select value={ls} onChange={e=>setLs(e.target.value)}>{STAGES.map(s=><option key={s}>{s}</option>)}</select>
+                  <div className="e" style={{fontSize:10,color:"#9CA3AF",marginTop:4}}>Updates all contacts under this company</div>
                 </div>
               </div>
             </div>
@@ -1103,9 +1146,13 @@ export default function App() {
                   const c = contacts.find(x=>x.id===targetId)||logCompany.contacts[0];
                   const newEntry = {date:TODAY,note:ln,action:la,stage:ls,type:lt,by:cu};
                   await supabase.from("contacts").update({
-                    last_note:ln, last_touch:TODAY, next_action:la, next_due:ld, stage:ls,
+                    last_note:ln, last_touch:TODAY, next_action:la, next_due:ld,
                     history:[...(c?.history||[]),newEntry],
                   }).eq("id",targetId);
+                  // Update stage on ALL contacts in this company
+                  if(ls) await Promise.all(logCompany.contacts.map(con=>
+                    supabase.from("contacts").update({stage:ls}).eq("id",con.id)
+                  ));
                 }
                 await fetch();
                 setSaving(false); setLogCompany(null); setLn(""); setLa(""); setLd("");
