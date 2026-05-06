@@ -203,6 +203,63 @@ const OwnerBar = ({contacts}) => {
         <span className="e" style={{fontSize:11,color:USERS.nick.color}}>{nc} Nick</span>
         <span className="e" style={{fontSize:11,color:USERS.maz.color}}>{mc} Maz</span>
       </div>
+      {/* COMPANY LOG MODAL */}
+      {logCompany&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,backdropFilter:"blur(4px)"}} onClick={()=>setLogCompany(null)}>
+          <div className="fu" style={{background:"#fff",border:"1px solid #E5E5E5",borderRadius:12,padding:32,width:560,maxWidth:"94vw",boxShadow:"0 20px 60px rgba(0,0,0,0.12)",overflowY:"auto",maxHeight:"90vh"}} onClick={e=>e.stopPropagation()}>
+            <div style={{fontSize:22,fontWeight:700,letterSpacing:"-.02em",color:"#1a1a1a",marginBottom:4}}>Log touchpoint</div>
+            <div className="e" style={{fontSize:13,color:"#9CA3AF",marginBottom:24}}>{logCompany.name} · saving as {u.name}</div>
+
+            <div style={{marginBottom:14}}>
+              <label className="lbl">Contact</label>
+              <select value={logCompany.selectedContactId||""} onChange={e=>setLogCompany({...logCompany,selectedContactId:e.target.value?parseInt(e.target.value):null})}>
+                <option value="">Company-wide (no specific contact)</option>
+                {logCompany.contacts.map(c=><option key={c.id} value={c.id}>{c.contact||c.company}</option>)}
+              </select>
+            </div>
+
+            <div style={{marginBottom:14}}>
+              <label className="lbl">Activity type</label>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {ACTIVITY_TYPES.map(a=><button key={a.value} onClick={()=>setLt(a.value)} style={{border:`1px solid ${lt===a.value?"#1a1a1a":"#E5E5E5"}`,background:lt===a.value?"#1a1a1a":"#fff",color:lt===a.value?"#fff":"#6B7280",borderRadius:20,padding:"5px 14px",fontSize:12,fontFamily:"Epilogue,sans-serif",cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><span>{a.icon}</span>{a.label}</button>)}
+              </div>
+            </div>
+
+            <div style={{display:"grid",gap:12,marginBottom:14}}>
+              <div><label className="lbl">What happened?</label><textarea rows={3} placeholder="Notes from the call, email, meeting…" value={ln} onChange={e=>setLn(e.target.value)}/></div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                <div><label className="lbl">Next action</label><input placeholder="e.g. Send proposal" value={la} onChange={e=>setLa(e.target.value)}/></div>
+                <CalPicker label="Next follow-up" value={ld} onChange={setLd}/>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                <div>
+                  <label className="lbl">Stage</label>
+                  <select value={ls} onChange={e=>setLs(e.target.value)}>{STAGES.map(s=><option key={s}>{s}</option>)}</select>
+                </div>
+              </div>
+            </div>
+
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <button className="btn ghost e" onClick={()=>setLogCompany(null)}>Cancel</button>
+              <button className="btn e" style={{background:u.color,color:"#fff",opacity:(!ln.trim()||saving)?.6:1}} disabled={!ln.trim()||saving} onClick={async()=>{
+                if(!ln.trim()) return;
+                setSaving(true);
+                const targetId = logCompany.selectedContactId || logCompany.contacts[0]?.id;
+                if(targetId){
+                  const c = contacts.find(x=>x.id===targetId)||logCompany.contacts[0];
+                  const newEntry = {date:TODAY,note:ln,action:la,stage:ls,type:lt,by:cu};
+                  await supabase.from("contacts").update({
+                    last_note:ln, last_touch:TODAY, next_action:la, next_due:ld, stage:ls,
+                    history:[...(c?.history||[]),newEntry],
+                  }).eq("id",targetId);
+                }
+                await fetch();
+                setSaving(false); setLogCompany(null); setLn(""); setLa(""); setLd("");
+              }}>{saving?"Saving…":"Save touchpoint"}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -371,75 +428,104 @@ function ProfileEditor({contact:c,onSave,saving,pacing}) {
   );
 }
 
-function BioCard({company,onOpen}) {
-  const [exp,setExp]=useState(false);
-  const [bio,setBio]=useState(null);
-  const [loading,setLoading]=useState(false);
-  const ws=company.contacts.map(c=>c.website).find(Boolean);
+function CompanyCard({company, onOpen, onLogTouchpoint, allContacts, pacing}) {
+  const [exp, setExp] = useState(false);
+  const ws = company.contacts.map(c => c.website).find(Boolean);
 
-  const fetchBio=async()=>{
-    if(bio) return;
-    if(!ws){setBio([{point:"No website on file — add one in the contact Profile tab."}]);return;}
-    setLoading(true);
-    try{
-      const first=company.contacts[0];
-      if(first.company_bio){setBio(JSON.parse(first.company_bio));setLoading(false);return;}
-      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:`Return ONLY a JSON array of 4 objects, each with a single "point" key (max 15 words). Cover: founding, what they do, size, market position. No markdown.`,messages:[{role:"user",content:`Company: ${company.name}\nWebsite: ${ws}`}]})});
-      const data=await res.json();
-      const txt=data.content?.find(b=>b.type==="text")?.text||"[]";
-      const parsed=JSON.parse(txt.replace(/```json|```/g,"").trim());
-      setBio(parsed);
-      await supabase.from("contacts").update({company_bio:JSON.stringify(parsed)}).eq("id",first.id);
-    }catch{setBio([{point:"Couldn't load bio — check the website URL."}]);}
-    setLoading(false);
-  };
+  // Merge all history from all contacts under this company, sorted newest first
+  const allHistory = company.contacts
+    .flatMap(c => (c.history||[]).map(h => ({...h, contactName: c.contact||c.company, contactId: c.id})))
+    .sort((a,b) => new Date(b.date) - new Date(a.date));
 
-  const toggle=e=>{e.stopPropagation();if(!exp)fetchBio();setExp(o=>!o);};
-  const refresh=async e=>{e.stopPropagation();setBio(null);await supabase.from("contacts").update({company_bio:null}).eq("id",company.contacts[0].id);fetchBio();};
+  // Most recent stage across contacts
+  const latestStage = company.contacts.slice().sort((a,b) => new Date(b.last_touch||0) - new Date(a.last_touch||0))[0]?.stage;
+  const latestDue = company.contacts.map(c=>c.next_due).filter(Boolean).sort()[0];
 
   return (
     <div style={{background:"#fff",border:"1px solid #EBEBEB",borderRadius:10,marginBottom:10,overflow:"hidden"}}>
-      <div style={{padding:"16px 24px",display:"grid",gridTemplateColumns:"1fr 100px 120px 160px 40px",gap:16,alignItems:"center",cursor:"pointer",transition:"background .12s"}} onMouseEnter={e=>e.currentTarget.style.background="#F7F7F5"} onMouseLeave={e=>e.currentTarget.style.background="#fff"} onClick={toggle}>
+      {/* Header row */}
+      <div style={{padding:"16px 24px",display:"grid",gridTemplateColumns:"1fr 120px 120px 140px 40px",gap:16,alignItems:"center",cursor:"pointer",transition:"background .12s"}}
+        onMouseEnter={e=>e.currentTarget.style.background="#F7F7F5"}
+        onMouseLeave={e=>e.currentTarget.style.background="#fff"}
+        onClick={()=>setExp(o=>!o)}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <div style={{width:38,height:38,borderRadius:"50%",background:"#F3F4F6",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1px solid #EBEBEB"}}><span style={{fontSize:16,fontWeight:700,color:"#6B7280"}}>{company.name?.[0]||"?"}</span></div>
+          <div style={{width:38,height:38,borderRadius:"50%",background:"#F3F4F6",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1px solid #EBEBEB"}}>
+            <span style={{fontSize:16,fontWeight:700,color:"#6B7280"}}>{company.name?.[0]||"?"}</span>
+          </div>
           <div>
             <div style={{fontSize:15,fontWeight:600,color:"#1a1a1a"}}>{company.name}</div>
-            {ws&&<a href={ws} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} className="e" style={{fontSize:11,color:"#4F46E5",textDecoration:"none"}}>🌐 {ws.replace(/^https?:\/\//,"").replace(/\/$/,"")}</a>}
+            <div style={{display:"flex",gap:8,marginTop:2,alignItems:"center",flexWrap:"wrap"}}>
+              {ws&&<a href={ws} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} className="e" style={{fontSize:11,color:"#4F46E5",textDecoration:"none"}}>🌐 {ws.replace(/^https?:\/\/|\/$/g,"")}</a>}
+              {company.contacts.length>1&&<span className="e" style={{fontSize:11,color:"#9CA3AF"}}>{company.contacts.length} contacts</span>}
+            </div>
           </div>
         </div>
         <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{[...new Set(company.contacts.map(c=>c.owner))].map(o=><OwnerPill key={o} userId={o}/>)}</div>
         <div className="e" style={{fontSize:13,fontWeight:600,color:company.tv>0?"#15803D":"#D1D5DB"}}>{company.tv>0?fmtC(company.tv):"—"}</div>
-        <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{[...company.stages].map(s=><SBadge key={s} stage={s}/>)}</div>
+        <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{latestStage&&<SBadge stage={latestStage}/>}{latestDue&&<UBadge due={latestDue}/>}</div>
         <div style={{fontSize:14,color:"#9CA3AF",textAlign:"center",transition:"transform .2s",transform:exp?"rotate(180deg)":"rotate(0deg)"}}>▾</div>
       </div>
+
       {exp&&(
-        <div style={{borderTop:"1px solid #EBEBEB",padding:"20px 24px",background:"#FAFAF8"}}>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24}}>
-            <div>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-                <div className="e" style={{fontSize:10,letterSpacing:".1em",textTransform:"uppercase",color:"#9CA3AF"}}>Company overview</div>
-                {bio&&!loading&&<button onClick={refresh} className="e" style={{fontSize:10,color:"#9CA3AF",background:"none",border:"none",cursor:"pointer",padding:0}}>↻ Refresh</button>}
+        <div style={{borderTop:"1px solid #EBEBEB",background:"#FAFAF8"}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 320px",gap:0}}>
+
+            {/* LEFT: Timeline */}
+            <div style={{padding:"20px 24px",borderRight:"1px solid #EBEBEB"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+                <div className="e" style={{fontSize:10,letterSpacing:".1em",textTransform:"uppercase",color:"#9CA3AF"}}>Touchpoint history ({allHistory.length})</div>
+                <button onClick={e=>{e.stopPropagation();onLogTouchpoint(company);}} className="btn e" style={{background:"#1a1a1a",color:"#fff",padding:"5px 14px",fontSize:11}}>+ Log touchpoint</button>
               </div>
-              {loading&&<div style={{display:"flex",alignItems:"center",gap:8}}><div className="spinner" style={{width:16,height:16,borderWidth:2}}/><span className="e" style={{fontSize:12,color:"#9CA3AF"}}>Generating…</span></div>}
-              {!loading&&bio&&<ul style={{listStyle:"none",padding:0,margin:0}}>{bio.map((b,i)=><li key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"flex-start"}}><span style={{color:"#4F46E5",fontWeight:700,flexShrink:0}}>·</span><span className="e" style={{fontSize:13,color:"#374151",lineHeight:1.5}}>{b.point}</span></li>)}</ul>}
+              {allHistory.length===0&&<div className="e" style={{fontSize:13,color:"#D1D5DB"}}>No touchpoints logged yet.</div>}
+              <div style={{position:"relative"}}>
+                <div style={{position:"absolute",left:4,top:8,bottom:8,width:1,background:"#EBEBEB"}}/>
+                {allHistory.map((h,i)=>(
+                  <div key={i} style={{display:"flex",gap:14,paddingBottom:16}}>
+                    <div style={{paddingTop:3,flexShrink:0}}>
+                      <div style={{width:9,height:9,borderRadius:"50%",background:i===0?"#1a1a1a":"#D1D5DB",border:"2px solid #FAFAF8",flexShrink:0}}/>
+                    </div>
+                    <div style={{flex:1,background:i===0?"#fff":"transparent",border:i===0?"1px solid #EBEBEB":"none",borderRadius:7,padding:i===0?"10px 14px":"0 0 0 2px"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4,flexWrap:"wrap"}}>
+                        <span style={{fontSize:13}}>{aIcon(h.type)}</span>
+                        <span className="e" style={{fontSize:11,fontWeight:500,color:i===0?"#1a1a1a":"#9CA3AF"}}>{fmtS(h.date)}</span>
+                        {h.by&&<OwnerPill userId={h.by}/>}
+                        {h.contactName&&<span className="e" style={{fontSize:10,color:"#9CA3AF",background:"#F3F4F6",padding:"1px 7px",borderRadius:20}}>{h.contactName}</span>}
+                        {i===0&&<span className="tag e" style={{background:"#F3F4F6",color:"#6B7280",fontSize:9}}>Latest</span>}
+                      </div>
+                      <div style={{fontSize:13,color:i===0?"#1a1a1a":"#6B7280",lineHeight:1.5}}>{h.note||"—"}</div>
+                      {h.action&&h.action!=="—"&&<div className="e" style={{fontSize:11,color:"#C4C4C4",marginTop:3}}>→ {h.action}</div>}
+                      {h.stage&&<div style={{marginTop:4}}><SBadge stage={h.stage}/></div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div>
+
+            {/* RIGHT: Contacts panel */}
+            <div style={{padding:"20px 20px"}}>
               <div className="e" style={{fontSize:10,letterSpacing:".1em",textTransform:"uppercase",color:"#9CA3AF",marginBottom:12}}>Contacts ({company.contacts.length})</div>
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 {company.contacts.map(c=>(
-                  <div key={c.id} onClick={e=>{e.stopPropagation();onOpen(c);}} style={{background:"#fff",border:"1px solid #EBEBEB",borderRadius:8,padding:"10px 14px",cursor:"pointer",transition:"box-shadow .15s"}} onMouseEnter={e=>e.currentTarget.style.boxShadow="0 2px 8px rgba(0,0,0,0.08)"} onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
+                  <div key={c.id} onClick={e=>{e.stopPropagation();onOpen(c);}}
+                    style={{background:"#fff",border:"1px solid #EBEBEB",borderRadius:8,padding:"10px 12px",cursor:"pointer",transition:"box-shadow .15s"}}
+                    onMouseEnter={e=>e.currentTarget.style.boxShadow="0 2px 8px rgba(0,0,0,0.08)"}
+                    onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                       <div>
-                        <div style={{fontSize:14,fontWeight:600,color:"#1a1a1a"}}>{c.contact||c.company}</div>
-                        <div style={{display:"flex",gap:10,marginTop:3,flexWrap:"wrap"}}>
-                          {c.email&&<a href={`mailto:${c.email}`} onClick={e=>e.stopPropagation()} className="e" style={{fontSize:11,color:"#4F46E5",textDecoration:"none"}}>✉️ {c.email}</a>}
-                          {c.phone&&<a href={`tel:${c.phone}`} onClick={e=>e.stopPropagation()} className="e" style={{fontSize:11,color:"#4F46E5",textDecoration:"none"}}>📞 {c.phone}</a>}
-                          {c.linkedin&&<a href={c.linkedin} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} className="e" style={{fontSize:11,color:"#4F46E5",textDecoration:"none"}}>💼 LinkedIn</a>}
+                        <div style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{c.contact||c.company}</div>
+                        <div style={{display:"flex",gap:8,marginTop:3,flexWrap:"wrap"}}>
+                          {c.email&&<a href={`mailto:${c.email}`} onClick={e=>e.stopPropagation()} className="e" style={{fontSize:11,color:"#4F46E5",textDecoration:"none"}}>✉️</a>}
+                          {c.phone&&<a href={`tel:${c.phone}`} onClick={e=>e.stopPropagation()} className="e" style={{fontSize:11,color:"#4F46E5",textDecoration:"none"}}>📞</a>}
+                          {c.linkedin&&<a href={c.linkedin} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} className="e" style={{fontSize:11,color:"#4F46E5",textDecoration:"none"}}>💼</a>}
                         </div>
                       </div>
-                      <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}><OwnerPill userId={c.owner}/><SBadge stage={c.stage}/></div>
+                      <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>
+                        <OwnerPill userId={c.owner}/>
+                        <SBadge stage={c.stage}/>
+                      </div>
                     </div>
-                    {c.next_action&&<div className="e" style={{fontSize:11,color:"#9CA3AF",marginTop:6}}>→ {c.next_action}</div>}
+                    {c.next_action&&<div className="e" style={{fontSize:11,color:"#9CA3AF",marginTop:4}}>→ {c.next_action}</div>}
+                    <PacingWarn contact={c} pacing={pacing}/>
                   </div>
                 ))}
               </div>
@@ -451,44 +537,92 @@ function BioCard({company,onOpen}) {
   );
 }
 
-function CompaniesView({contacts,onOpen}) {
-  const [search,setSearch]=useState("");
-  const map={};
-  contacts.forEach(c=>{
-    const k=c.company?.toLowerCase().trim()||"unknown";
-    if(!map[k]) map[k]={name:c.company,contacts:[],tv:0,stages:new Set()};
-    map[k].contacts.push(c);map[k].tv+=parseFloat(c.deal_value)||0;map[k].stages.add(c.stage);
+
+
+function CompaniesView({contacts, onOpen, onLogTouchpoint, pacing}) {
+  const [search, setSearch] = useState("");
+  const [stageF, setStageF] = useState("All");
+
+  const map = {};
+  contacts.forEach(c => {
+    const k = c.company?.toLowerCase().trim() || "unknown";
+    if (!map[k]) map[k] = {name:c.company, contacts:[], tv:0, stages:new Set()};
+    map[k].contacts.push(c);
+    map[k].tv += parseFloat(c.deal_value) || 0;
+    map[k].stages.add(c.stage);
   });
-  const list=Object.values(map).filter(co=>!search||co.name?.toLowerCase().includes(search.toLowerCase())).sort((a,b)=>b.tv-a.tv||b.contacts.length-a.contacts.length);
+
+  const list = Object.values(map)
+    .filter(co => !search || co.name?.toLowerCase().includes(search.toLowerCase()))
+    .filter(co => stageF === "All" || co.stages.has(stageF))
+    .sort((a,b) => b.tv - a.tv || b.contacts.length - a.contacts.length);
+
   return (
-    <div className="fu" style={{maxWidth:960,margin:"0 auto",padding:"40px 24px"}}>
+    <div className="fu" style={{maxWidth:980,margin:"0 auto",padding:"40px 24px"}}>
       <div style={{marginBottom:24}}>
         <div style={{fontSize:34,fontWeight:700,letterSpacing:"-.02em",color:"#1a1a1a"}}>Companies</div>
-        <div className="e" style={{fontSize:13,color:"#9CA3AF",marginTop:4}}>{list.length} companies in pipeline</div>
+        <div className="e" style={{fontSize:13,color:"#9CA3AF",marginTop:4}}>{list.length} companies</div>
       </div>
-      <div style={{marginBottom:20}}><SearchBar value={search} onChange={setSearch}/></div>
-      <div className="e" style={{padding:"10px 24px",display:"grid",gridTemplateColumns:"1fr 100px 120px 160px 40px",gap:16,fontSize:10,color:"#C4C4C4",letterSpacing:".12em",textTransform:"uppercase",marginBottom:4}}><span>Company</span><span>Owner</span><span>Value</span><span>Stages</span><span/></div>
+      <div style={{marginBottom:14}}><SearchBar value={search} onChange={setSearch}/></div>
+      <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
+        {["All",...STAGES].map(s=>(
+          <button key={s} className={`filter-btn e ${stageF===s?"on":""}`} onClick={()=>setStageF(s)}>{s}</button>
+        ))}
+      </div>
+      <div className="e" style={{padding:"10px 24px",display:"grid",gridTemplateColumns:"1fr 120px 120px 180px 40px",gap:16,fontSize:10,color:"#C4C4C4",letterSpacing:".12em",textTransform:"uppercase",marginBottom:4}}>
+        <span>Company</span><span>Owner</span><span>Value</span><span>Stage / Due</span><span/>
+      </div>
       {list.length===0&&<EmptyState title="No companies found."/>}
-      {list.map(co=><BioCard key={co.name} company={co} onOpen={onOpen}/>)}
+      {list.map(co=><CompanyCard key={co.name} company={co} onOpen={onOpen} onLogTouchpoint={onLogTouchpoint} allContacts={contacts} pacing={pacing}/>)}
     </div>
   );
 }
 
-function PipelineView({contacts,currentUser,onOpen}) {
-  const [ownerF,setOwnerF]=useState("all");
-  const active=contacts.filter(c=>!c.archived);
-  const filtered=active.filter(c=>ownerF==="all"?true:c.owner===currentUser);
-  const sd=STAGES.map(s=>{const cols=filtered.filter(c=>c.stage===s);return {s,count:cols.length,value:cols.reduce((a,c)=>a+(parseFloat(c.deal_value)||0),0),cols};});
-  const tp=filtered.filter(c=>c.stage!=="Closed Lost").reduce((a,c)=>a+(parseFloat(c.deal_value)||0),0);
-  const tw=filtered.filter(c=>c.stage==="Closed Won").reduce((a,c)=>a+(parseFloat(c.deal_value)||0),0);
-  const ct=filtered.filter(c=>c.stage==="Closed Won"||c.stage==="Closed Lost").length;
-  const wr=ct?Math.round(filtered.filter(c=>c.stage==="Closed Won").length/ct*100):null;
+function PipelineView({contacts, currentUser, onOpen, onGoToCompany}) {
+  const [ownerF, setOwnerF] = useState("all");
+  const [expanded, setExpanded] = useState({});
+  const active = contacts.filter(c => !c.archived);
+  const filtered = active.filter(c => ownerF==="all" ? true : c.owner===currentUser);
+
+  // Group by company for pipeline display
+  const companiesByStage = stage => {
+    const map = {};
+    filtered.filter(c => c.stage===stage).forEach(c => {
+      const k = c.company?.toLowerCase().trim()||"?";
+      if (!map[k]) map[k] = {name:c.company, contacts:[], tv:0};
+      map[k].contacts.push(c);
+      map[k].tv += parseFloat(c.deal_value)||0;
+    });
+    return Object.values(map).sort((a,b) => b.tv-a.tv);
+  };
+
+  const sd = STAGES.map(s => {
+    const companies = companiesByStage(s);
+    const value = companies.reduce((a,co)=>a+co.tv,0);
+    return {s, count:companies.length, value, companies};
+  });
+
+  const tp = filtered.filter(c=>c.stage!=="Closed Lost").reduce((a,c)=>a+(parseFloat(c.deal_value)||0),0);
+  const tw = filtered.filter(c=>c.stage==="Closed Won").reduce((a,c)=>a+(parseFloat(c.deal_value)||0),0);
+  const ct = filtered.filter(c=>c.stage==="Closed Won"||c.stage==="Closed Lost").length;
+  const wr = ct ? Math.round(filtered.filter(c=>c.stage==="Closed Won").length/ct*100) : null;
+
+  const toggle = s => setExpanded(e => ({...e, [s]:!e[s]}));
+
   return (
-    <div className="fu" style={{maxWidth:1100,margin:"0 auto",padding:"40px 24px"}}>
+    <div className="fu" style={{maxWidth:900,margin:"0 auto",padding:"40px 24px"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:28}}>
-        <div><div style={{fontSize:34,fontWeight:700,letterSpacing:"-.02em",color:"#1a1a1a"}}>Pipeline</div><div className="e" style={{fontSize:13,color:"#9CA3AF",marginTop:4}}>Stage-by-stage breakdown</div></div>
-        <div style={{display:"flex",gap:6}}>{[["all","Everyone"],[currentUser,USERS[currentUser].name]].map(([k,l])=><button key={k} className={`filter-btn e ${ownerF===k?"on":""}`} onClick={()=>setOwnerF(k)}>{l}</button>)}</div>
+        <div>
+          <div style={{fontSize:34,fontWeight:700,letterSpacing:"-.02em",color:"#1a1a1a"}}>Pipeline</div>
+          <div className="e" style={{fontSize:13,color:"#9CA3AF",marginTop:4}}>Stage-by-stage breakdown</div>
+        </div>
+        <div style={{display:"flex",gap:6}}>
+          {[["all","Everyone"],[currentUser,USERS[currentUser].name]].map(([k,l])=>(
+            <button key={k} className={`filter-btn e ${ownerF===k?"on":""}`} onClick={()=>setOwnerF(k)}>{l}</button>
+          ))}
+        </div>
       </div>
+
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16,marginBottom:32}}>
         {[{l:"Active pipeline",v:fmtC(tp),c:"#4F46E5",show:tp>0},{l:"Closed won",v:fmtC(tw),c:"#15803D",show:tw>0},{l:"Win rate",v:wr!==null?`${wr}%`:"—",c:"#D97706",show:wr!==null}].map(({l,v,c,show})=>(
           <div key={l} style={{background:"#fff",border:"1px solid #EBEBEB",borderRadius:10,padding:"20px 24px"}}>
@@ -497,16 +631,48 @@ function PipelineView({contacts,currentUser,onOpen}) {
           </div>
         ))}
       </div>
+
       <div style={{background:"#fff",border:"1px solid #EBEBEB",borderRadius:10,overflow:"hidden"}}>
-        <div className="e" style={{padding:"10px 24px",display:"grid",gridTemplateColumns:"140px 60px 120px 1fr",gap:16,fontSize:10,color:"#C4C4C4",letterSpacing:".12em",textTransform:"uppercase",borderBottom:"1px solid #EBEBEB",background:"#FAFAF8"}}><span>Stage</span><span>Count</span><span>Value</span><span>Companies</span></div>
-        {sd.map(({s,count,value,cols})=>(
-          <div key={s} style={{padding:"16px 24px",display:"grid",gridTemplateColumns:"140px 60px 120px 1fr",gap:16,alignItems:"center",borderBottom:"1px solid #EBEBEB"}}>
-            <SBadge stage={s}/><div className="e" style={{fontSize:15,fontWeight:600,color:count>0?"#1a1a1a":"#D1D5DB"}}>{count}</div>
-            <div className="e" style={{fontSize:14,fontWeight:600,color:value>0?"#15803D":"#D1D5DB"}}>{value>0?fmtC(value):"—"}</div>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              {cols.slice(0,8).map(c=><button key={c.id} onClick={()=>onOpen(c)} style={{border:"1px solid #E5E5E5",background:"#F8F8F6",borderRadius:20,padding:"3px 10px",fontSize:11,fontFamily:"Epilogue,sans-serif",cursor:"pointer",color:"#1a1a1a"}}>{c.company}</button>)}
-              {cols.length>8&&<span className="e" style={{fontSize:11,color:"#9CA3AF",alignSelf:"center"}}>+{cols.length-8} more</span>}
+        {sd.map(({s, count, value, companies}, si) => (
+          <div key={s}>
+            <div style={{padding:"16px 24px",display:"grid",gridTemplateColumns:"1fr 60px 120px 40px",gap:16,alignItems:"center",borderBottom:"1px solid #EBEBEB",cursor:count>0?"pointer":"default",transition:"background .12s"}}
+              onMouseEnter={e=>count>0&&(e.currentTarget.style.background="#F7F7F5")}
+              onMouseLeave={e=>e.currentTarget.style.background="#fff"}
+              onClick={()=>count>0&&toggle(s)}>
+              <SBadge stage={s}/>
+              <div className="e" style={{fontSize:15,fontWeight:600,color:count>0?"#1a1a1a":"#D1D5DB"}}>{count}</div>
+              <div className="e" style={{fontSize:14,fontWeight:600,color:value>0?"#15803D":"#D1D5DB"}}>{value>0?fmtC(value):"—"}</div>
+              <div style={{fontSize:13,color:"#9CA3AF",textAlign:"center",transition:"transform .2s",transform:expanded[s]?"rotate(180deg)":"rotate(0deg)"}}>
+                {count>0?"▾":""}
+              </div>
             </div>
+
+            {expanded[s] && count>0 && (
+              <div style={{background:"#FAFAF8",borderBottom:"1px solid #EBEBEB"}}>
+                {companies.map((co, ci) => (
+                  <div key={co.name} style={{padding:"12px 24px 12px 40px",display:"grid",gridTemplateColumns:"1fr 120px 120px",gap:16,alignItems:"center",borderBottom:ci<companies.length-1?"1px solid #EBEBEB":"none",cursor:"pointer",transition:"background .12s"}}
+                    onMouseEnter={e=>e.currentTarget.style.background="#F0F0EE"}
+                    onMouseLeave={e=>e.currentTarget.style.background="transparent"}
+                    onClick={()=>onGoToCompany(co.name)}>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      <div style={{width:6,height:6,borderRadius:"50%",background:STAGE_COLORS[s]?.text||"#9CA3AF",flexShrink:0}}/>
+                      <div>
+                        <div style={{fontSize:14,fontWeight:600,color:"#1a1a1a"}}>{co.name}</div>
+                        <div className="e" style={{fontSize:11,color:"#9CA3AF"}}>
+                          {co.contacts.map(c=>c.contact||"").filter(Boolean).join(", ")||"No named contacts"}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                      {[...new Set(co.contacts.map(c=>c.owner))].map(o=><OwnerPill key={o} userId={o}/>)}
+                    </div>
+                    <div className="e" style={{fontSize:13,fontWeight:600,color:co.tv>0?"#15803D":"#D1D5DB"}}>
+                      {co.tv>0?fmtC(co.tv):"—"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -514,151 +680,6 @@ function PipelineView({contacts,currentUser,onOpen}) {
   );
 }
 
-
-// ── CLEANUP VIEW ──────────────────────────────────────────────────────────────
-
-function CleanupView({ contacts, onDone }) {
-  // Show all active contacts where contact field is blank — these might be person-name rows
-  const suspects = contacts.filter(c => !c.archived && !c.contact);
-  const allCompanies = [...new Set(contacts.filter(c => c.company).map(c => c.company))].sort();
-
-  const [fixing, setFixing] = useState(null);
-  const [newCompany, setNewCompany] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [done, setDone] = useState([]);
-
-  const openFix = c => { setFixing(c); setNewCompany(""); };
-
-  const applyFix = async () => {
-    if (!newCompany.trim() || !fixing) return;
-    setSaving(true);
-
-    // Find if a real company row already exists with this name
-    const existingCompanyRow = contacts.find(c =>
-      c.company?.toLowerCase().trim() === newCompany.trim().toLowerCase() &&
-      c.id !== fixing.id
-    );
-
-    if (existingCompanyRow) {
-      // Merge: write the person's name + contact details onto the existing company row
-      // only fill fields that are blank on the company row
-      const mergeUpdates = { contact: fixing.company };
-      if (!existingCompanyRow.phone    && fixing.phone)    mergeUpdates.phone    = fixing.phone;
-      if (!existingCompanyRow.email    && fixing.email)    mergeUpdates.email    = fixing.email;
-      if (!existingCompanyRow.linkedin && fixing.linkedin) mergeUpdates.linkedin = fixing.linkedin;
-      if (!existingCompanyRow.deal_value && fixing.deal_value) mergeUpdates.deal_value = fixing.deal_value;
-      // Merge history arrays
-      const mergedHistory = [...(existingCompanyRow.history || []), ...(fixing.history || [])];
-      if (mergedHistory.length) mergeUpdates.history = mergedHistory;
-
-      await supabase.from("contacts").update(mergeUpdates).eq("id", existingCompanyRow.id);
-      // Delete the now-redundant person row
-      await supabase.from("contacts").delete().eq("id", fixing.id);
-    } else {
-      // No existing company row — just rename this row in place
-      await supabase.from("contacts").update({
-        contact: fixing.company,
-        company: newCompany.trim(),
-      }).eq("id", fixing.id);
-    }
-
-    setDone(d => [...d, fixing.id]);
-    setFixing(null);
-    setSaving(false);
-    onDone();
-  };
-
-  const remaining = suspects.filter(c => !done.includes(c.id));
-
-  return (
-    <div className="fu" style={{maxWidth:760,margin:"0 auto",padding:"40px 24px"}}>
-      <div style={{marginBottom:28}}>
-        <div style={{fontSize:34,fontWeight:700,letterSpacing:"-.02em",color:"#1a1a1a"}}>Data cleanup</div>
-        <div className="e" style={{fontSize:13,color:"#9CA3AF",marginTop:4}}>Contacts with no contact name set — check if any of these are actually people rather than companies</div>
-      </div>
-
-      {remaining.length === 0 && (
-        <EmptyState icon="✓" title="All clean!" sub="Every contact has a contact name set." />
-      )}
-
-      {remaining.length > 0 && (
-        <div style={{background:"#fff",border:"1px solid #EBEBEB",borderRadius:10,overflow:"hidden",marginBottom:24}}>
-          <div className="e" style={{padding:"10px 24px",display:"grid",gridTemplateColumns:"1fr 120px 120px 100px",gap:16,fontSize:10,color:"#C4C4C4",letterSpacing:".12em",textTransform:"uppercase",borderBottom:"1px solid #EBEBEB",background:"#FAFAF8"}}>
-            <span>Current "company" value</span><span>Stage</span><span>Owner</span><span></span>
-          </div>
-          {remaining.map((c, i) => (
-            <div key={c.id} style={{padding:"14px 24px",display:"grid",gridTemplateColumns:"1fr 120px 120px 100px",gap:16,alignItems:"center",borderBottom:i<remaining.length-1?"1px solid #EBEBEB":"none"}}>
-              <div>
-                <div style={{fontSize:15,fontWeight:600,color:"#1a1a1a"}}>{c.company}</div>
-                {c.contact && <div className="e" style={{fontSize:12,color:"#9CA3AF",marginTop:2}}>contact field: {c.contact}</div>}
-                {c.email && <div className="e" style={{fontSize:12,color:"#9CA3AF"}}>{c.email}</div>}
-              </div>
-              <SBadge stage={c.stage} />
-              <OwnerPill userId={c.owner} />
-              <button className="btn e" style={{background:"#FFF7ED",color:"#C2410C",border:"1px solid #FED7AA",padding:"6px 14px",fontSize:11}} onClick={() => openFix(c)}>Fix →</button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {done.length > 0 && (
-        <div className="e" style={{fontSize:13,color:"#15803D",marginBottom:16}}>✓ {done.length} fixed this session</div>
-      )}
-
-      <div style={{background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:8,padding:"14px 18px"}}>
-        <div className="e" style={{fontSize:12,color:"#1D4ED8"}}>
-          💡 <strong>What this does:</strong> If a row is actually a person (e.g. "Kym Treasure" listed as the company), click Fix. Their name moves into the Contact field and you assign them to their real company (e.g. "Audacia Audio"). Everything else — stage, owner, history — stays untouched.
-        </div>
-      </div>
-
-      {fixing && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,backdropFilter:"blur(4px)"}} onClick={() => setFixing(null)}>
-          <div className="fu" style={{background:"#fff",border:"1px solid #E5E5E5",borderRadius:12,padding:32,width:500,maxWidth:"94vw",boxShadow:"0 20px 60px rgba(0,0,0,0.12)"}} onClick={e=>e.stopPropagation()}>
-            <div style={{fontSize:22,fontWeight:700,letterSpacing:"-.02em",color:"#1a1a1a",marginBottom:4}}>Who does this person work at?</div>
-            <div className="e" style={{fontSize:13,color:"#9CA3AF",marginBottom:24}}><strong style={{color:"#1a1a1a"}}>{fixing.company}</strong> will become a contact — pick their company below</div>
-
-            <div style={{marginBottom:20}}>
-              <label className="lbl">Which company does {fixing.company} work at? *</label>
-              <input
-                list="company-list"
-                placeholder="e.g. Commbank Connect"
-                value={newCompany}
-                onChange={e => setNewCompany(e.target.value)}
-                autoFocus
-                style={{fontSize:14}}
-              />
-              <datalist id="company-list">
-                {allCompanies.map(co => <option key={co} value={co} />)}
-              </datalist>
-              <div className="e" style={{fontSize:11,color:"#9CA3AF",marginTop:6}}>Type a new company name or pick an existing one from the list</div>
-            </div>
-
-            <div style={{background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:8,padding:"12px 16px",marginBottom:24}}>
-              <div className="e" style={{fontSize:12,color:"#15803D",marginBottom:6,fontWeight:500}}>After fixing, this row will be:</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                <div>
-                  <div className="e" style={{fontSize:10,color:"#15803D",letterSpacing:".08em",textTransform:"uppercase",marginBottom:2}}>Company</div>
-                  <div className="e" style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{newCompany||"(company name)"}</div>
-                </div>
-                <div>
-                  <div className="e" style={{fontSize:10,color:"#15803D",letterSpacing:".08em",textTransform:"uppercase",marginBottom:2}}>Contact name</div>
-                  <div className="e" style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{fixing.company}</div>
-                </div>
-              </div>
-            </div>
-
-            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-              <button className="btn ghost e" onClick={() => setFixing(null)}>Cancel</button>
-              <button className="btn e" style={{background:"#4F46E5",color:"#fff",opacity:(!newCompany.trim()||saving)?.6:1}} onClick={applyFix} disabled={!newCompany.trim()||saving}>
-                {saving ? "Saving…" : "Apply fix"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 const EMPTY = {company:"",contact:"",phone:"",email:"",linkedin:"",website:"",industry:"",company_size:"",deal_value:"",last_touch:TODAY,last_note:"",next_action:"",next_due:"",stage:"Outreach",owner:"nick",tags:[],archived:false,follow_up_interval:""};
 
@@ -677,12 +698,14 @@ export default function App() {
   const [wt,setWt]=useState("overdue");
   const [vm,setVm]=useState("list");
   const [sq,setSq]=useState("");
+  const [cf,setCf]=useState(""); // company filter for jumping from contacts
   const [ln,setLn]=useState("");
   const [la,setLa]=useState("");
   const [ld,setLd]=useState("");
   const [ls,setLs]=useState("");
   const [lt,setLt]=useState("note");
   const [dt,setDt]=useState("log");
+  const [logCompany,setLogCompany]=useState(null); // company object for company-level log modal
   const [pacing,setPacing]=useState(loadPacing);
   const [authed,setAuthed]=useState(()=>sessionStorage.getItem("2st_auth")==="true");
   const [pw,setPw]=useState("");
@@ -710,12 +733,17 @@ export default function App() {
   const pid=Object.keys(USERS).find(k=>k!==cu);
   const myPO=myA.filter(c=>isPacingOverdue(c,pacing)&&urgency(c.next_due).diff>0);
   const sm=c=>{if(!sq)return true;const q=sq.toLowerCase();return[c.company,c.contact,c.email,c.phone,c.last_note,c.next_action,...(c.tags||[])].some(f=>f?.toLowerCase().includes(q));};
-  const dc=contacts.filter(c=>af==="active"?!c.archived:af==="archived"?c.archived:true).filter(c=>sf==="All"||c.stage===sf).filter(c=>of==="all"?true:of==="mine"?c.owner===cu:c.owner!==cu).filter(sm);
+  const dc=contacts.filter(c=>af==="active"?!c.archived:af==="archived"?c.archived:true).filter(c=>sf==="All"||c.stage===sf).filter(c=>of==="all"?true:of==="mine"?c.owner===cu:c.owner!==cu).filter(c=>!cf||c.company===cf).filter(sm);
   const fc=allA.filter(c=>of==="all"?true:c.owner===cu);
   const pv=allA.filter(c=>c.stage!=="Closed Lost").reduce((s,c)=>s+(parseFloat(c.deal_value)||0),0);
   const wv=contacts.filter(c=>c.stage==="Closed Won").reduce((s,c)=>s+(parseFloat(c.deal_value)||0),0);
 
   const open=c=>{setSel(c.id);setLn("");setLt("note");setLa(c.next_action);setLd(addDays(TODAY,effectiveInterval(c,pacing)));setLs(c.stage);setDt("log");};
+  const openCompanyLog=company=>{
+    const first=company.contacts[0];
+    setLogCompany({...company, selectedContactId: first?.id||null});
+    setLn(""); setLt("note"); setLa(""); setLd(addDays(TODAY,30)); setLs(first?.stage||"Outreach");
+  };
 
   const saveLog=async id=>{
     const c=contacts.find(x=>x.id===id);
@@ -880,7 +908,7 @@ export default function App() {
       <div style={{background:"#fff",borderBottom:"1px solid #EBEBEB",padding:"12px 40px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:50}}>
         <div style={{cursor:"pointer"}} onClick={()=>setPage("home")}><img src="/logo.png" alt="2Square" style={{height:32,width:"auto",objectFit:"contain"}}/></div>
         <div style={{display:"flex",gap:4}}>
-          {[["home","Home"],["followups","Follow-ups"],["contacts","Contacts"],["companies","Companies"],["pipeline","Pipeline"],["settings","Settings"],["cleanup","🧹 Cleanup"]].map(([k,l])=>(
+          {[["home","Home"],["followups","Follow-ups"],["contacts","Contacts"],["companies","Companies"],["pipeline","Pipeline"],["settings","Settings"]].map(([k,l])=>(
             <button key={k} className={`nav-btn e ${page===k?"active":""}`} onClick={()=>setPage(k)}>{l}{k==="followups"&&myDue.length>0&&<span style={{background:"#DC2626",color:"#fff",borderRadius:10,fontSize:10,padding:"1px 6px",marginLeft:4}}>{myDue.length}</span>}</button>
           ))}
         </div>
@@ -981,22 +1009,40 @@ export default function App() {
             <div style={{display:"flex",gap:8,alignItems:"center"}}><div style={{display:"flex",background:"#F3F4F6",borderRadius:8,padding:3}}>{[["list","☰"],["kanban","⊞"]].map(([k,ic])=><button key={k} onClick={()=>setVm(k)} style={{border:"none",cursor:"pointer",fontFamily:"Epilogue,sans-serif",fontSize:13,padding:"5px 12px",borderRadius:6,background:vm===k?"#fff":"transparent",color:vm===k?"#1a1a1a":"#9CA3AF",transition:"all .15s"}}>{ic}</button>)}</div></div>
           </div>
           <div style={{marginBottom:16}}><SearchBar value={sq} onChange={setSq}/></div>
-          <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
+          <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
             {["active","archived","all"].map(f=><button key={f} className={`filter-btn e ${af===f?"on":""}`} onClick={()=>setAf(f)}>{f.charAt(0).toUpperCase()+f.slice(1)}</button>)}
             <span style={{width:1,background:"#E5E5E5",margin:"0 4px"}}/>
             {[["mine","Mine"],["theirs","Partner's"],["all","Everyone's"]].map(([k,l])=><button key={k} className={`filter-btn e ${of===k?"on":""}`} onClick={()=>setOf(k)}>{l}</button>)}
             <span style={{width:1,background:"#E5E5E5",margin:"0 4px"}}/>
             {["All",...STAGES].map(s=><button key={s} className={`filter-btn e ${sf===s?"on":""}`} onClick={()=>setSf(s)}>{s}</button>)}
           </div>
+          {/* Company filter chips */}
+          {[...new Set(allA.map(c=>c.company).filter(Boolean))].sort().length>0&&(
+            <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+              <span className="e" style={{fontSize:11,color:"#9CA3AF",marginRight:4}}>Company:</span>
+              <button className={`filter-btn e ${!cf?"on":""}`} onClick={()=>setCf("")}>All</button>
+              {[...new Set(allA.map(c=>c.company).filter(Boolean))].sort().map(co=>(
+                <button key={co} className={`filter-btn e ${cf===co?"on":""}`} onClick={()=>setCf(co)}>{co}</button>
+              ))}
+            </div>
+          )}
           {vm==="list"&&(
             <div style={{background:"#fff",border:"1px solid #EBEBEB",borderRadius:10,overflow:"hidden"}}>
-              <div className="e" style={{padding:"10px 24px",display:"grid",gridTemplateColumns:"1fr 90px 150px 120px 80px 90px",gap:16,fontSize:10,color:"#C4C4C4",letterSpacing:".12em",textTransform:"uppercase",borderBottom:"1px solid #EBEBEB",background:"#FAFAF8"}}><span>Company / Contact</span><span>Owner</span><span>Next action</span><span>Stage</span><span>Value</span><span>Due</span></div>
+              <div className="e" style={{padding:"10px 24px",display:"grid",gridTemplateColumns:"180px 1fr 120px 80px 90px",gap:16,fontSize:10,color:"#C4C4C4",letterSpacing:".12em",textTransform:"uppercase",borderBottom:"1px solid #EBEBEB",background:"#FAFAF8"}}><span>Contact</span><span>Company</span><span>Stage</span><span>Value</span><span>Due</span></div>
               {dc.length===0&&<div className="e" style={{padding:"40px 24px",textAlign:"center",color:"#D1D5DB",fontSize:13}}>No contacts in this view.</div>}
               {dc.map(c=>(
-                <div key={c.id} className="row" style={{padding:"13px 24px",display:"grid",gridTemplateColumns:"1fr 90px 150px 120px 80px 90px",gap:16,alignItems:"center",opacity:c.archived?.5:1,borderLeft:`3px solid ${(USERS[c.owner]||USERS.nick).color}`}} onClick={()=>open(c)}>
-                  <div><div style={{fontSize:15,fontWeight:600,color:"#1a1a1a"}}>{c.contact||c.company}</div><div className="e" style={{fontSize:11,color:"#6B7280",marginTop:1,display:"flex",alignItems:"center",gap:6}}>{c.contact&&<span onClick={e=>{e.stopPropagation();setPage("companies");}} style={{color:"#4F46E5",cursor:"pointer",textDecoration:"none"}}>{c.company}</span>}{(c.tags||[]).slice(0,2).map(t=><span key={t} className="chip" style={{marginLeft:4}}>{t}</span>)}<PacingWarn contact={c} pacing={pacing}/></div></div>
-                  <OwnerPill userId={c.owner}/>
-                  <div className="e" style={{fontSize:12,color:"#6B7280",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.next_action}</div>
+                <div key={c.id} className="row" style={{padding:"13px 24px",display:"grid",gridTemplateColumns:"180px 1fr 120px 80px 90px",gap:16,alignItems:"center",opacity:c.archived?.5:1,borderLeft:`3px solid ${(USERS[c.owner]||USERS.nick).color}`}} onClick={()=>open(c)}>
+                  <div>
+                    <div style={{fontSize:14,fontWeight:600,color:"#1a1a1a"}}>{c.contact||"—"}</div>
+                    <div className="e" style={{fontSize:11,color:"#9CA3AF",marginTop:1,display:"flex",alignItems:"center",gap:4}}><OwnerPill userId={c.owner}/></div>
+                  </div>
+                  <div>
+                    <div onClick={e=>{e.stopPropagation();setPage("companies");setCf(c.company||"");}} style={{fontSize:14,fontWeight:500,color:"#4F46E5",cursor:"pointer"}}>{c.company}</div>
+                    <div className="e" style={{fontSize:11,color:"#9CA3AF",marginTop:1,display:"flex",alignItems:"center",gap:4}}>
+                      {(c.tags||[]).slice(0,2).map(t=><span key={t} className="chip">{t}</span>)}
+                      <PacingWarn contact={c} pacing={pacing}/>
+                    </div>
+                  </div>
                   <SBadge stage={c.stage}/>
                   <div className="e" style={{fontSize:12,color:c.deal_value?"#15803D":"#D1D5DB"}}>{c.deal_value?fmtC(c.deal_value):"—"}</div>
                   <UBadge due={c.next_due}/>
@@ -1028,10 +1074,9 @@ export default function App() {
         </div>
       )}
 
-      {page==="companies"&&<CompaniesView contacts={allA} onOpen={open}/>}
-      {page==="pipeline"&&<PipelineView contacts={contacts} currentUser={cu} onOpen={open}/>}
+      {page==="companies"&&<CompaniesView contacts={allA} onOpen={open} onLogTouchpoint={openCompanyLog} pacing={pacing}/>}
+      {page==="pipeline"&&<PipelineView contacts={contacts} currentUser={cu} onOpen={open} onGoToCompany={name=>{setPage("companies");}}/>}
       {page==="settings"&&<SettingsView pacing={pacing} onSave={savePacingState}/>}
-      {page==="cleanup"&&<CleanupView contacts={contacts} onDone={fetch}/>}
 
       {showAdd&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,backdropFilter:"blur(4px)"}} onClick={()=>setShowAdd(false)}>
