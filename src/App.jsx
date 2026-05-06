@@ -381,7 +381,7 @@ function ProfileEditor({contact:c,onSave,saving,pacing}) {
       </div>
       <div style={{marginBottom:20}}><label className="lbl">Tags</label><TagInput tags={form.tags} onChange={tags=>setForm({...form,tags})}/></div>
       <div style={{display:"flex",justifyContent:"flex-end"}}>
-        <button className="btn e" style={{background:saved?"#15803D":"#1a1a1a",color:"#fff",opacity:saving?.6:1}} onClick={save} disabled={saving}>{saving?"Saving…":saved?"Saved ✓":"Save changes"}</button>
+        <button className="btn e" style={{background:saved?"#15803D":"#1a1a1a",color:"#fff",opacity:saving?0.6:1}} onClick={save} disabled={saving}>{saving?"Saving…":saved?"Saved ✓":"Save changes"}</button>
       </div>
     </div>
   );
@@ -444,7 +444,7 @@ function CompanyCard({company, onOpen, onLogTouchpoint, allContacts, pacing, onS
               border:`1px solid ${STAGE_COLORS[currentStage]?.text||"#9CA3AF"}40`,
               background:STAGE_COLORS[currentStage]?.bg||"#F1F5F9",
               color:STAGE_COLORS[currentStage]?.text||"#475569",
-              opacity:stageSaving?.6:1, width:"100%",
+              opacity:stageSaving?0.6:1, width:"100%",
             }}>
             {STAGES.map(s=><option key={s} value={s}>{s}</option>)}
           </select>
@@ -851,7 +851,7 @@ export default function App() {
                 </div>
                 <div style={{display:"flex",justifyContent:"flex-end",gap:8}}>
                   <button className="btn ghost e" onClick={()=>setSel(null)}>Cancel</button>
-                  <button className="btn e" style={{background:u.color,color:"#fff",opacity:saving?.6:1}} onClick={()=>saveLog(c.id)} disabled={saving}>{saving?"Saving…":"Save & reset follow-up"}</button>
+                  <button className="btn e" style={{background:u.color,color:"#fff",opacity:saving?0.6:1}} onClick={()=>saveLog(c.id)} disabled={saving}>{saving?"Saving…":"Save & reset follow-up"}</button>
                 </div>
               </div>
             </div>
@@ -1094,7 +1094,7 @@ export default function App() {
             </div>
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
               <button className="btn ghost e" onClick={()=>setShowAdd(false)}>Cancel</button>
-              <button className="btn e" style={{background:u.color,color:"#fff",opacity:saving?.6:1}} onClick={saveForm} disabled={saving}>{saving?"Saving…":`Save ${showAdd}`}</button>
+              <button className="btn e" style={{background:u.color,color:"#fff",opacity:saving?0.6:1}} onClick={saveForm} disabled={saving}>{saving?"Saving…":`Save ${showAdd}`}</button>
             </div>
           </div>
         </div>
@@ -1138,8 +1138,7 @@ export default function App() {
 
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
               <button className="btn ghost e" onClick={()=>setLogCompany(null)}>Cancel</button>
-              <button className="btn e" style={{background:u.color,color:"#fff",opacity:(!ln.trim()||saving)?.6:1}} disabled={!ln.trim()||saving} onClick={async()=>{
-                if(!ln.trim()) return;
+              <button className="btn e" style={{background:u.color,color:"#fff",opacity:saving?0.6:1}} disabled={saving} onClick={async()=>{
                 setSaving(true);
                 const targetId = logCompany.selectedContactId || logCompany.contacts[0]?.id;
                 if(targetId){
