@@ -517,19 +517,10 @@ function PipelineView({contacts,currentUser,onOpen}) {
 
 // ── CLEANUP VIEW ──────────────────────────────────────────────────────────────
 
-const looksLikePerson = name => {
-  if (!name) return false;
-  const lower = name.toLowerCase();
-  const companyWords = ["pty","ltd","limited","group","co","corp","inc","solutions","services","consulting","capital","media","digital","ventures","holdings","associates","partners","collective","studio","agency","technologies","technology","connect","bank","financial","insurance","health","legal","property","real","estate"];
-  if (companyWords.some(w => lower.includes(w))) return false;
-  const words = name.trim().split(/\s+/);
-  if (words.length < 2 || words.length > 3) return false;
-  return words.every(w => w.length > 1 && w[0] === w[0].toUpperCase() && /^[A-Za-z]+$/.test(w));
-};
-
 function CleanupView({ contacts, onDone }) {
-  const suspects = contacts.filter(c => !c.archived && looksLikePerson(c.company));
-  const companies = [...new Set(contacts.filter(c => !looksLikePerson(c.company) && c.company).map(c => c.company))].sort();
+  // Show all active contacts where contact field is blank — these might be person-name rows
+  const suspects = contacts.filter(c => !c.archived && !c.contact);
+  const allCompanies = [...new Set(contacts.filter(c => c.company).map(c => c.company))].sort();
 
   const [fixing, setFixing] = useState(null);
   const [newCompany, setNewCompany] = useState("");
@@ -541,10 +532,36 @@ function CleanupView({ contacts, onDone }) {
   const applyFix = async () => {
     if (!newCompany.trim() || !fixing) return;
     setSaving(true);
-    await supabase.from("contacts").update({
-      contact: fixing.company,
-      company: newCompany.trim(),
-    }).eq("id", fixing.id);
+
+    // Find if a real company row already exists with this name
+    const existingCompanyRow = contacts.find(c =>
+      c.company?.toLowerCase().trim() === newCompany.trim().toLowerCase() &&
+      c.id !== fixing.id
+    );
+
+    if (existingCompanyRow) {
+      // Merge: write the person's name + contact details onto the existing company row
+      // only fill fields that are blank on the company row
+      const mergeUpdates = { contact: fixing.company };
+      if (!existingCompanyRow.phone    && fixing.phone)    mergeUpdates.phone    = fixing.phone;
+      if (!existingCompanyRow.email    && fixing.email)    mergeUpdates.email    = fixing.email;
+      if (!existingCompanyRow.linkedin && fixing.linkedin) mergeUpdates.linkedin = fixing.linkedin;
+      if (!existingCompanyRow.deal_value && fixing.deal_value) mergeUpdates.deal_value = fixing.deal_value;
+      // Merge history arrays
+      const mergedHistory = [...(existingCompanyRow.history || []), ...(fixing.history || [])];
+      if (mergedHistory.length) mergeUpdates.history = mergedHistory;
+
+      await supabase.from("contacts").update(mergeUpdates).eq("id", existingCompanyRow.id);
+      // Delete the now-redundant person row
+      await supabase.from("contacts").delete().eq("id", fixing.id);
+    } else {
+      // No existing company row — just rename this row in place
+      await supabase.from("contacts").update({
+        contact: fixing.company,
+        company: newCompany.trim(),
+      }).eq("id", fixing.id);
+    }
+
     setDone(d => [...d, fixing.id]);
     setFixing(null);
     setSaving(false);
@@ -557,11 +574,11 @@ function CleanupView({ contacts, onDone }) {
     <div className="fu" style={{maxWidth:760,margin:"0 auto",padding:"40px 24px"}}>
       <div style={{marginBottom:28}}>
         <div style={{fontSize:34,fontWeight:700,letterSpacing:"-.02em",color:"#1a1a1a"}}>Data cleanup</div>
-        <div className="e" style={{fontSize:13,color:"#9CA3AF",marginTop:4}}>Rows where the company field looks like a person's name</div>
+        <div className="e" style={{fontSize:13,color:"#9CA3AF",marginTop:4}}>Contacts with no contact name set — check if any of these are actually people rather than companies</div>
       </div>
 
       {remaining.length === 0 && (
-        <EmptyState icon="✓" title="All clean!" sub="No entries look like misplaced person names." />
+        <EmptyState icon="✓" title="All clean!" sub="Every contact has a contact name set." />
       )}
 
       {remaining.length > 0 && (
@@ -590,7 +607,7 @@ function CleanupView({ contacts, onDone }) {
 
       <div style={{background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:8,padding:"14px 18px"}}>
         <div className="e" style={{fontSize:12,color:"#1D4ED8"}}>
-          💡 <strong>What this does:</strong> When you click Fix, the person's name moves from the "Company" field into the "Contact" field, and you assign it to the real company. The rest of the contact's data stays untouched.
+          💡 <strong>What this does:</strong> If a row is actually a person (e.g. "Kym Treasure" listed as the company), click Fix. Their name moves into the Contact field and you assign them to their real company (e.g. "Audacia Audio"). Everything else — stage, owner, history — stays untouched.
         </div>
       </div>
 
@@ -611,7 +628,7 @@ function CleanupView({ contacts, onDone }) {
                 style={{fontSize:14}}
               />
               <datalist id="company-list">
-                {companies.map(co => <option key={co} value={co} />)}
+                {allCompanies.map(co => <option key={co} value={co} />)}
               </datalist>
               <div className="e" style={{fontSize:11,color:"#9CA3AF",marginTop:6}}>Type a new company name or pick an existing one from the list</div>
             </div>
