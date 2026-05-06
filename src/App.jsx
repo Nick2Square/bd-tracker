@@ -514,6 +514,126 @@ function PipelineView({contacts,currentUser,onOpen}) {
   );
 }
 
+
+// ── CLEANUP VIEW ──────────────────────────────────────────────────────────────
+
+const looksLikePerson = name => {
+  if (!name) return false;
+  const lower = name.toLowerCase();
+  const companyWords = ["pty","ltd","limited","group","co","corp","inc","solutions","services","consulting","capital","media","digital","ventures","holdings","associates","partners","collective","studio","agency","technologies","technology","connect","bank","financial","insurance","health","legal","property","real","estate"];
+  if (companyWords.some(w => lower.includes(w))) return false;
+  const words = name.trim().split(/\s+/);
+  if (words.length < 2 || words.length > 3) return false;
+  return words.every(w => w.length > 1 && w[0] === w[0].toUpperCase() && /^[A-Za-z]+$/.test(w));
+};
+
+function CleanupView({ contacts, onDone }) {
+  const suspects = contacts.filter(c => !c.archived && looksLikePerson(c.company));
+  const companies = [...new Set(contacts.filter(c => !looksLikePerson(c.company) && c.company).map(c => c.company))].sort();
+
+  const [fixing, setFixing] = useState(null);
+  const [newCompany, setNewCompany] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState([]);
+
+  const openFix = c => { setFixing(c); setNewCompany(""); };
+
+  const applyFix = async () => {
+    if (!newCompany.trim() || !fixing) return;
+    setSaving(true);
+    await supabase.from("contacts").update({
+      contact: fixing.company,
+      company: newCompany.trim(),
+    }).eq("id", fixing.id);
+    setDone(d => [...d, fixing.id]);
+    setFixing(null);
+    setSaving(false);
+    onDone();
+  };
+
+  const remaining = suspects.filter(c => !done.includes(c.id));
+
+  return (
+    <div className="fu" style={{maxWidth:760,margin:"0 auto",padding:"40px 24px"}}>
+      <div style={{marginBottom:28}}>
+        <div style={{fontSize:34,fontWeight:700,letterSpacing:"-.02em",color:"#1a1a1a"}}>Data cleanup</div>
+        <div className="e" style={{fontSize:13,color:"#9CA3AF",marginTop:4}}>Rows where the company field looks like a person's name</div>
+      </div>
+
+      {remaining.length === 0 && (
+        <EmptyState icon="✓" title="All clean!" sub="No entries look like misplaced person names." />
+      )}
+
+      {remaining.length > 0 && (
+        <div style={{background:"#fff",border:"1px solid #EBEBEB",borderRadius:10,overflow:"hidden",marginBottom:24}}>
+          <div className="e" style={{padding:"10px 24px",display:"grid",gridTemplateColumns:"1fr 120px 120px 100px",gap:16,fontSize:10,color:"#C4C4C4",letterSpacing:".12em",textTransform:"uppercase",borderBottom:"1px solid #EBEBEB",background:"#FAFAF8"}}>
+            <span>Current "company" value</span><span>Stage</span><span>Owner</span><span></span>
+          </div>
+          {remaining.map((c, i) => (
+            <div key={c.id} style={{padding:"14px 24px",display:"grid",gridTemplateColumns:"1fr 120px 120px 100px",gap:16,alignItems:"center",borderBottom:i<remaining.length-1?"1px solid #EBEBEB":"none"}}>
+              <div>
+                <div style={{fontSize:15,fontWeight:600,color:"#1a1a1a"}}>{c.company}</div>
+                {c.contact && <div className="e" style={{fontSize:12,color:"#9CA3AF",marginTop:2}}>contact field: {c.contact}</div>}
+                {c.email && <div className="e" style={{fontSize:12,color:"#9CA3AF"}}>{c.email}</div>}
+              </div>
+              <SBadge stage={c.stage} />
+              <OwnerPill userId={c.owner} />
+              <button className="btn e" style={{background:"#FFF7ED",color:"#C2410C",border:"1px solid #FED7AA",padding:"6px 14px",fontSize:11}} onClick={() => openFix(c)}>Fix →</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {done.length > 0 && (
+        <div className="e" style={{fontSize:13,color:"#15803D",marginBottom:16}}>✓ {done.length} fixed this session</div>
+      )}
+
+      <div style={{background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:8,padding:"14px 18px"}}>
+        <div className="e" style={{fontSize:12,color:"#1D4ED8"}}>
+          💡 <strong>What this does:</strong> When you click Fix, the person's name moves from the "Company" field into the "Contact" field, and you assign it to the real company. The rest of the contact's data stays untouched.
+        </div>
+      </div>
+
+      {fixing && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,backdropFilter:"blur(4px)"}} onClick={() => setFixing(null)}>
+          <div className="fu" style={{background:"#fff",border:"1px solid #E5E5E5",borderRadius:12,padding:32,width:480,maxWidth:"94vw",boxShadow:"0 20px 60px rgba(0,0,0,0.12)"}} onClick={e=>e.stopPropagation()}>
+            <div style={{fontSize:22,fontWeight:700,letterSpacing:"-.02em",color:"#1a1a1a",marginBottom:6}}>Fix this entry</div>
+            <div className="e" style={{fontSize:13,color:"#9CA3AF",marginBottom:24}}>Move the name to the contact field and assign a real company</div>
+
+            <div style={{background:"#F8F8F6",borderRadius:8,padding:"14px 16px",marginBottom:20}}>
+              <div className="e" style={{fontSize:11,letterSpacing:".1em",textTransform:"uppercase",color:"#9CA3AF",marginBottom:8}}>Will become</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                <div><div className="lbl" style={{marginBottom:3}}>Contact name</div><div style={{fontSize:14,fontWeight:600,color:"#1a1a1a",padding:"8px 12px",background:"#fff",border:"1px solid #E5E5E5",borderRadius:6}}>{fixing.company}</div></div>
+                <div>
+                  <div className="lbl" style={{marginBottom:3}}>Company *</div>
+                  <input
+                    list="company-list"
+                    placeholder="Type or pick a company…"
+                    value={newCompany}
+                    onChange={e => setNewCompany(e.target.value)}
+                    autoFocus
+                    style={{fontSize:14}}
+                  />
+                  <datalist id="company-list">
+                    {companies.map(co => <option key={co} value={co} />)}
+                  </datalist>
+                </div>
+              </div>
+            </div>
+
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <button className="btn ghost e" onClick={() => setFixing(null)}>Cancel</button>
+              <button className="btn e" style={{background:"#4F46E5",color:"#fff",opacity:(!newCompany.trim()||saving)?.6:1}} onClick={applyFix} disabled={!newCompany.trim()||saving}>
+                {saving ? "Saving…" : "Apply fix"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const EMPTY = {company:"",contact:"",phone:"",email:"",linkedin:"",website:"",industry:"",company_size:"",deal_value:"",last_touch:TODAY,last_note:"",next_action:"",next_due:"",stage:"Outreach",owner:"nick",tags:[],archived:false,follow_up_interval:""};
 
 export default function App() {
@@ -734,7 +854,7 @@ export default function App() {
       <div style={{background:"#fff",borderBottom:"1px solid #EBEBEB",padding:"12px 40px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:50}}>
         <div style={{cursor:"pointer"}} onClick={()=>setPage("home")}><img src="/logo.png" alt="2Square" style={{height:32,width:"auto",objectFit:"contain"}}/></div>
         <div style={{display:"flex",gap:4}}>
-          {[["home","Home"],["followups","Follow-ups"],["contacts","Contacts"],["companies","Companies"],["pipeline","Pipeline"],["settings","Settings"]].map(([k,l])=>(
+          {[["home","Home"],["followups","Follow-ups"],["contacts","Contacts"],["companies","Companies"],["pipeline","Pipeline"],["settings","Settings"],["cleanup","🧹 Cleanup"]].map(([k,l])=>(
             <button key={k} className={`nav-btn e ${page===k?"active":""}`} onClick={()=>setPage(k)}>{l}{k==="followups"&&myDue.length>0&&<span style={{background:"#DC2626",color:"#fff",borderRadius:10,fontSize:10,padding:"1px 6px",marginLeft:4}}>{myDue.length}</span>}</button>
           ))}
         </div>
@@ -885,6 +1005,7 @@ export default function App() {
       {page==="companies"&&<CompaniesView contacts={allA} onOpen={open}/>}
       {page==="pipeline"&&<PipelineView contacts={contacts} currentUser={cu} onOpen={open}/>}
       {page==="settings"&&<SettingsView pacing={pacing} onSave={savePacingState}/>}
+      {page==="cleanup"&&<CleanupView contacts={contacts} onDone={fetch}/>}
 
       {showAdd&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,backdropFilter:"blur(4px)"}} onClick={()=>setShowAdd(false)}>
