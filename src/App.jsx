@@ -699,14 +699,14 @@ export default function App() {
 
   const u=USERS[cu];
 
-  const fetch=useCallback(async()=>{
+  const fetchData=useCallback(async()=>{
     setL(true);
     const {data,error}=await supabase.from("contacts").select("*").order("next_due",{ascending:true});
     if(!error&&data) setC(data);
     setL(false);
   },[]);
 
-  useEffect(()=>{if(authed)fetch();},[authed,fetch]);
+  useEffect(()=>{if(authed)fetchData();},[authed,fetchData]);
   useEffect(()=>{const p=async()=>await supabase.from("contacts").select("id").limit(1);p();const iv=setInterval(p,1000*60*60*24*3);return()=>clearInterval(iv);},[]);
 
   const savePacingState=p=>{savePacing(p);setPacing(p);};
@@ -739,21 +739,21 @@ export default function App() {
     const nd=ld||addDays(TODAY,ni);
     const ne={date:TODAY,note:ln||c.last_note,action:la,stage:ls,type:lt,by:cu};
     await supabase.from("contacts").update({last_note:ln||c.last_note,last_touch:TODAY,next_action:la,next_due:nd,stage:ls,history:[...(c.history||[]),ne]}).eq("id",id);
-    await fetch();setS(false);setSel(null);
+    await fetchData();setS(false);setSel(null);
   };
 
-  const upd=async(id,u)=>{setS(true);await supabase.from("contacts").update(u).eq("id",id);await fetch();setS(false);};
+  const upd=async(id,u)=>{setS(true);await supabase.from("contacts").update(u).eq("id",id);await fetchData();setS(false);};
 
   const saveForm=async()=>{
     if(!form.company||!form.next_due) return;
     setS(true);
     await supabase.from("contacts").insert([{...form,archived:false,history:[{date:form.last_touch,note:form.last_note,action:form.next_action,stage:form.stage,type:"note",by:cu}]}]);
-    await fetch();setForm({...EMPTY,owner:cu});setShowAdd(false);setS(false);
+    await fetchData();setForm({...EMPTY,owner:cu});setShowAdd(false);setS(false);
   };
 
   const del=async id=>{
     if(!window.confirm("Delete this contact permanently?")) return;
-    setS(true);await supabase.from("contacts").delete().eq("id",id);await fetch();setS(false);setSel(null);
+    setS(true);await supabase.from("contacts").delete().eq("id",id);await fetchData();setS(false);setSel(null);
   };
 
   const login=()=>{if(pw===PASSWORD){sessionStorage.setItem("2st_auth","true");setAuthed(true);}else{setPwe(true);setTimeout(()=>setPwe(false),1500);}};
@@ -1060,12 +1060,12 @@ export default function App() {
         </div>
       )}
 
-      {page==="companies"&&<CompaniesView contacts={allA} onOpen={open} onLogTouchpoint={openCompanyLog} pacing={pacing} onRefresh={fetch}/>}
+      {page==="companies"&&<CompaniesView contacts={allA} onOpen={open} onLogTouchpoint={openCompanyLog} pacing={pacing} onRefresh={fetchData}/>}
       {page==="pipeline"&&<PipelineView contacts={contacts} currentUser={cu} onOpen={open} onGoToCompany={name=>{setPage("companies");}}/>}
       {page==="settings"&&<SettingsView pacing={pacing} onSave={savePacingState}/>}
 
       {showAdd&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,backdropFilter:"blur(4px)"}} onClick={()=>setShowAdd(false)}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100}} onClick={()=>setShowAdd(false)}>
           <div className="fu" style={{background:"#fff",border:"1px solid #E5E5E5",borderRadius:12,padding:32,width:600,maxWidth:"94vw",boxShadow:"0 20px 60px rgba(0,0,0,0.12)",overflowY:"auto",maxHeight:"92vh"}} onClick={e=>e.stopPropagation()}>
             <div style={{fontSize:26,fontWeight:700,letterSpacing:"-.02em",color:"#1a1a1a",marginBottom:6}}>{showAdd==="company"?"🏢 New company":"👤 New contact"}</div>
             <div className="e" style={{fontSize:12,color:"#9CA3AF",marginBottom:24}}>Fields marked * are required</div>
@@ -1101,7 +1101,7 @@ export default function App() {
       )}
       {/* COMPANY LOG MODAL */}
       {logCompany&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,backdropFilter:"blur(4px)"}} onClick={()=>setLogCompany(null)}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100}} onClick={()=>setLogCompany(null)}>
           <div className="fu" style={{background:"#fff",border:"1px solid #E5E5E5",borderRadius:12,padding:32,width:560,maxWidth:"94vw",boxShadow:"0 20px 60px rgba(0,0,0,0.12)",overflowY:"auto",maxHeight:"90vh"}} onClick={e=>e.stopPropagation()}>
             <div style={{fontSize:22,fontWeight:700,letterSpacing:"-.02em",color:"#1a1a1a",marginBottom:4}}>Log touchpoint</div>
             <div className="e" style={{fontSize:13,color:"#9CA3AF",marginBottom:24}}>{logCompany.name} · saving as {u.name}</div>
@@ -1153,7 +1153,7 @@ export default function App() {
                     supabase.from("contacts").update({stage:ls}).eq("id",con.id)
                   ));
                 }
-                await fetch();
+                await fetchData();
                 setSaving(false); setLogCompany(null); setLn(""); setLa(""); setLd("");
               }}>{saving?"Saving…":"Save touchpoint"}</button>
             </div>
