@@ -919,7 +919,7 @@ export default function App() {
               <div style={{background:"#fff",border:"1px solid #EBEBEB",borderRadius:10,overflow:"hidden"}}>
                 {myDue.map((c,i)=>(
                   <div key={c.id} className="row" style={{padding:"14px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:i<myDue.length-1?"1px solid #EBEBEB":"none"}} onClick={()=>open(c)}>
-                    <div style={{display:"flex",alignItems:"center",gap:12}}><div style={{width:3,height:36,borderRadius:4,background:u.color,flexShrink:0}}/><div><div style={{fontSize:17,fontWeight:600,color:"#1a1a1a"}}>{c.company}</div><div className="e" style={{fontSize:12,color:"#9CA3AF",marginTop:2}}>{c.contact} · {c.next_action}</div></div></div>
+                    <div style={{display:"flex",alignItems:"center",gap:12}}><div style={{width:3,height:36,borderRadius:4,background:u.color,flexShrink:0}}/><div><div style={{fontSize:17,fontWeight:600,color:"#1a1a1a"}}>{c.contact||c.company}</div><div className="e" style={{fontSize:12,color:"#9CA3AF",marginTop:2}}>{c.contact&&<span style={{color:"#4F46E5"}}>{c.company} · </span>}{c.next_action}</div></div></div>
                     <div style={{display:"flex",alignItems:"center",gap:12}}>{c.deal_value&&<span className="e" style={{fontSize:12,color:"#6B7280"}}>{fmtC(c.deal_value)}</span>}<UBadge due={c.next_due}/><span className="e" style={{fontSize:12,color:"#C4C4C4"}}>Log →</span></div>
                   </div>
                 ))}
@@ -930,7 +930,7 @@ export default function App() {
             <div style={{marginTop:24}}>
               <div className="e" style={{fontSize:11,letterSpacing:".1em",textTransform:"uppercase",color:"#9CA3AF",marginBottom:12}}>Pacing overdue — touched less often than their interval</div>
               <div style={{background:"#fff",border:"1px solid #DDD6FE",borderRadius:10,overflow:"hidden"}}>
-                {myPO.map((c,i)=><div key={c.id} className="row" style={{padding:"12px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:i<myPO.length-1?"1px solid #EBEBEB":"none"}} onClick={()=>open(c)}><div style={{display:"flex",alignItems:"center",gap:10}}><div style={{width:3,height:32,borderRadius:4,background:"#7C3AED",flexShrink:0}}/><div><div style={{fontSize:15,fontWeight:600,color:"#1a1a1a"}}>{c.company}</div><div className="e" style={{fontSize:11,color:"#9CA3AF",display:"flex",alignItems:"center",gap:6}}>{c.contact} · <SBadge stage={c.stage}/></div></div></div><span className="pw">⏱ {daysSinceTouch(c)}d since last touch</span></div>)}
+                {myPO.map((c,i)=><div key={c.id} className="row" style={{padding:"12px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:i<myPO.length-1?"1px solid #EBEBEB":"none"}} onClick={()=>open(c)}><div style={{display:"flex",alignItems:"center",gap:10}}><div style={{width:3,height:32,borderRadius:4,background:"#7C3AED",flexShrink:0}}/><div><div style={{fontSize:15,fontWeight:600,color:"#1a1a1a"}}>{c.contact||c.company}</div><div className="e" style={{fontSize:11,color:"#9CA3AF",display:"flex",alignItems:"center",gap:6}}>{c.contact&&<span style={{color:"#4F46E5"}}>{c.company} · </span>}<SBadge stage={c.stage}/></div></div></div><span className="pw">⏱ {daysSinceTouch(c)}d since last touch</span></div>)}
               </div>
             </div>
           )}
@@ -938,7 +938,7 @@ export default function App() {
             <div style={{marginTop:24}}>
               <div className="e" style={{fontSize:11,letterSpacing:".1em",textTransform:"uppercase",color:"#9CA3AF",marginBottom:12}}>{pu.name}'s overdue ({pd.length})</div>
               <div style={{background:pu.bg,border:`1px solid ${pu.color}20`,borderRadius:10,overflow:"hidden"}}>
-                {pd.map((c,i)=><div key={c.id} className="row" style={{padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:i<pd.length-1?`1px solid ${pu.color}15`:"none",background:"transparent"}} onClick={()=>open(c)}><div style={{display:"flex",alignItems:"center",gap:10}}><Avatar userId={pid} size={20}/><div><div style={{fontSize:15,fontWeight:600,color:"#1a1a1a"}}>{c.company}</div><div className="e" style={{fontSize:11,color:"#9CA3AF"}}>{c.contact}</div></div></div><UBadge due={c.next_due}/></div>)}
+                {pd.map((c,i)=><div key={c.id} className="row" style={{padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:i<pd.length-1?`1px solid ${pu.color}15`:"none",background:"transparent"}} onClick={()=>open(c)}><div style={{display:"flex",alignItems:"center",gap:10}}><Avatar userId={pid} size={20}/><div><div style={{fontSize:15,fontWeight:600,color:"#1a1a1a"}}>{c.contact||c.company}</div><div className="e" style={{fontSize:11,color:"#4F46E5"}}>{c.contact&&c.company}</div></div></div><UBadge due={c.next_due}/></div>)}
               </div>
             </div>
           );})()}
@@ -963,7 +963,7 @@ export default function App() {
                 <div className="e" style={{padding:"10px 24px",display:"grid",gridTemplateColumns:"1fr 60px 180px 110px 100px",gap:16,fontSize:10,color:"#C4C4C4",letterSpacing:".12em",textTransform:"uppercase",borderBottom:"1px solid #EBEBEB",background:"#FAFAF8"}}><span>Company</span><span>Owner</span><span>Next action</span><span>Stage</span><span style={{textAlign:"right"}}>Due</span></div>
                 {filt.map((c,i)=>(
                   <div key={c.id} className="row" style={{padding:"13px 24px",display:"grid",gridTemplateColumns:"1fr 60px 180px 110px 100px",gap:16,alignItems:"center",borderBottom:i<filt.length-1?"1px solid #EBEBEB":"none"}} onClick={()=>open(c)}>
-                    <div style={{display:"flex",alignItems:"center",gap:10}}><div style={{width:3,height:32,borderRadius:4,background:(USERS[c.owner]||USERS.nick).color,flexShrink:0}}/><div><div style={{fontSize:15,fontWeight:600,color:"#1a1a1a"}}>{c.company}</div><div className="e" style={{fontSize:11,color:"#6B7280",marginTop:1,display:"flex",alignItems:"center",gap:6}}>{c.contact}<PacingWarn contact={c} pacing={pacing}/></div></div></div>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}><div style={{width:3,height:32,borderRadius:4,background:(USERS[c.owner]||USERS.nick).color,flexShrink:0}}/><div><div style={{fontSize:15,fontWeight:600,color:"#1a1a1a"}}>{c.contact||c.company}</div><div className="e" style={{fontSize:11,color:"#6B7280",marginTop:1,display:"flex",alignItems:"center",gap:6}}>{c.contact&&<span style={{color:"#4F46E5"}}>{c.company}</span>}<PacingWarn contact={c} pacing={pacing}/></div></div></div>
                     <OwnerPill userId={c.owner}/><div className="e" style={{fontSize:12,color:"#6B7280",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.next_action}</div><SBadge stage={c.stage}/>
                     <div style={{display:"flex",justifyContent:"flex-end"}}><UBadge due={c.next_due}/></div>
                   </div>
@@ -994,7 +994,7 @@ export default function App() {
               {dc.length===0&&<div className="e" style={{padding:"40px 24px",textAlign:"center",color:"#D1D5DB",fontSize:13}}>No contacts in this view.</div>}
               {dc.map(c=>(
                 <div key={c.id} className="row" style={{padding:"13px 24px",display:"grid",gridTemplateColumns:"1fr 90px 150px 120px 80px 90px",gap:16,alignItems:"center",opacity:c.archived?.5:1,borderLeft:`3px solid ${(USERS[c.owner]||USERS.nick).color}`}} onClick={()=>open(c)}>
-                  <div><div style={{fontSize:15,fontWeight:600,color:"#1a1a1a"}}>{c.company}</div><div className="e" style={{fontSize:11,color:"#6B7280",marginTop:1,display:"flex",alignItems:"center",gap:6}}>{c.contact}{(c.tags||[]).slice(0,2).map(t=><span key={t} className="chip" style={{marginLeft:4}}>{t}</span>)}<PacingWarn contact={c} pacing={pacing}/></div></div>
+                  <div><div style={{fontSize:15,fontWeight:600,color:"#1a1a1a"}}>{c.contact||c.company}</div><div className="e" style={{fontSize:11,color:"#6B7280",marginTop:1,display:"flex",alignItems:"center",gap:6}}>{c.contact&&<span onClick={e=>{e.stopPropagation();setPage("companies");}} style={{color:"#4F46E5",cursor:"pointer",textDecoration:"none"}}>{c.company}</span>}{(c.tags||[]).slice(0,2).map(t=><span key={t} className="chip" style={{marginLeft:4}}>{t}</span>)}<PacingWarn contact={c} pacing={pacing}/></div></div>
                   <OwnerPill userId={c.owner}/>
                   <div className="e" style={{fontSize:12,color:"#6B7280",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.next_action}</div>
                   <SBadge stage={c.stage}/>
@@ -1012,8 +1012,8 @@ export default function App() {
                   {cv>0&&<div className="e" style={{fontSize:11,color:"#6B7280",marginBottom:10}}>{fmtC(cv)}</div>}
                   {cols.map(c=>(
                     <div key={c.id} className="kanban-card" onClick={()=>open(c)}>
-                      <div style={{fontSize:14,fontWeight:600,color:"#1a1a1a",marginBottom:3}}>{c.company}</div>
-                      {c.contact&&<div className="e" style={{fontSize:11,color:"#9CA3AF",marginBottom:6}}>{c.contact}</div>}
+                      <div style={{fontSize:14,fontWeight:600,color:"#1a1a1a",marginBottom:3}}>{c.contact||c.company}</div>
+                      {c.contact&&<div className="e" style={{fontSize:11,color:"#4F46E5",marginBottom:6,cursor:"pointer"}} onClick={e=>{e.stopPropagation();setPage("companies");}}>{c.company}</div>}
                       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}><OwnerPill userId={c.owner}/><UBadge due={c.next_due}/></div>
                       {c.deal_value&&<div className="e" style={{fontSize:12,color:"#15803D",fontWeight:600,marginTop:6}}>{fmtC(c.deal_value)}</div>}
                       <div style={{marginTop:4}}><PacingWarn contact={c} pacing={pacing}/></div>
