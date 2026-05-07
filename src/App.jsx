@@ -765,40 +765,149 @@ function LogModal({company, contacts, currentUser, pacing, onClose, onSaved}) {
 
 // ── ADD CONTACT/COMPANY MODAL (portal) ────────────────────────────────────────
 
-function AddModal({type, form, setForm, onClose, onSave, saving, pacing, users}) {
-  const u = users[form.owner] || users.nick;
+function AddModal({type, allContacts, onClose, onSaved, currentUser, pacing}) {
+  const u = USERS[currentUser] || USERS.nick;
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  // Company form state
+  const [cName, setCName] = useState("");
+  const [cWebsite, setCWebsite] = useState("");
+  const [cIndustry, setCIndustry] = useState("");
+  const [cSize, setCSize] = useState("");
+  const [cOwner, setCOwner] = useState(currentUser);
+  const [cStage, setCStage] = useState("Outreach");
+  const [cValue, setCValue] = useState("");
+  const [cNote, setCNote] = useState("");
+  const [cAction, setCAction] = useState("");
+  const [cDue, setCDue] = useState("");
+
+  // Contact form state
+  const [ctCompany, setCtCompany] = useState(""); // existing company name or new
+  const [ctName, setCtName] = useState("");
+  const [ctPhone, setCtPhone] = useState("");
+  const [ctEmail, setCtEmail] = useState("");
+  const [ctLinkedin, setCtLinkedin] = useState("");
+  const [ctOwner, setCtOwner] = useState(currentUser);
+  const [ctNote, setCtNote] = useState("");
+  const [ctAction, setCtAction] = useState("");
+  const [ctDue, setCtDue] = useState("");
+
+  const existingCompanies = [...new Set(allContacts.filter(c=>c.company).map(c=>c.company))].sort();
+
+  // When picking an existing company, inherit its stage/owner/website
+  const matchedCompany = allContacts.find(c => c.company === ctCompany);
+
+  const saveCompany = async () => {
+    if (!cName.trim()) { setError("Company name is required"); return; }
+    setSaving(true); setError("");
+    await supabase.from("contacts").insert([{
+      company: cName.trim(), contact: "", website: cWebsite, industry: cIndustry,
+      company_size: cSize, owner: cOwner, stage: cStage, deal_value: cValue||null,
+      last_touch: TODAY, last_note: cNote, next_action: cAction,
+      next_due: cDue || addDays(TODAY, pacing[cStage]||30),
+      archived: false, tags: [],
+      history: [{date:TODAY, note:cNote, action:cAction, stage:cStage, type:"note", by:currentUser}],
+    }]);
+    setSaving(false);
+    onSaved();
+  };
+
+  const saveContact = async () => {
+    if (!ctCompany.trim()) { setError("Please select or enter a company"); return; }
+    if (!ctName.trim()) { setError("Contact name is required"); return; }
+    setSaving(true); setError("");
+    const stage = matchedCompany?.stage || "Outreach";
+    const website = matchedCompany?.website || "";
+    const industry = matchedCompany?.industry || "";
+    await supabase.from("contacts").insert([{
+      company: ctCompany.trim(), contact: ctName.trim(),
+      phone: ctPhone, email: ctEmail, linkedin: ctLinkedin,
+      website, industry, owner: ctOwner, stage,
+      last_touch: TODAY, last_note: ctNote, next_action: ctAction,
+      next_due: ctDue || addDays(TODAY, pacing[stage]||30),
+      archived: false, tags: [],
+      history: [{date:TODAY, note:ctNote, action:ctAction, stage, type:"note", by:currentUser}],
+    }]);
+    setSaving(false);
+    onSaved();
+  };
+
+  const S = {fontFamily:"Epilogue,sans-serif"};
+  const labelStyle = {...S, fontSize:10, letterSpacing:".1em", textTransform:"uppercase", color:"#9CA3AF", display:"block", marginBottom:5};
+  const inputStyle = {...S, fontSize:13, padding:"9px 12px", borderRadius:6, border:"1px solid #E5E5E5", width:"100%", outline:"none", background:"#fff", color:"#1a1a1a"};
+  const btnPrimary = {...S, border:"none", background:u.color, color:"#fff", fontSize:12, padding:"9px 20px", borderRadius:6, cursor:saving?"default":"pointer", opacity:saving?0.6:1};
+  const btnGhost = {...S, border:"1px solid #E5E5E5", background:"none", color:"#6B7280", fontSize:12, padding:"9px 18px", borderRadius:6, cursor:"pointer"};
+  const grid2 = {display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:14};
+
   return createPortal(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000}} onClick={onClose}>
-      <div style={{background:"#fff",borderRadius:12,padding:32,width:600,maxWidth:"94vw",boxShadow:"0 24px 64px rgba(0,0,0,0.18)",overflowY:"auto",maxHeight:"92vh",fontFamily:"Cormorant Garamond,Georgia,serif"}} onClick={e=>e.stopPropagation()}>
-        <div style={{fontSize:26,fontWeight:700,letterSpacing:"-.02em",color:"#1a1a1a",marginBottom:6}}>{type==="company"?"🏢 New company":"👤 New contact"}</div>
-        <div style={{fontFamily:"Epilogue,sans-serif",fontSize:12,color:"#9CA3AF",marginBottom:24}}>Fields marked * are required</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
-          <div><label className="lbl">Company *</label><input placeholder="Acme Corp" value={form.company} onChange={e=>setForm({...form,company:e.target.value})}/></div>
-          {type==="contact"&&<div><label className="lbl">Contact name</label><input placeholder="Jane Smith" value={form.contact} onChange={e=>setForm({...form,contact:e.target.value})}/></div>}
-          <div><label className="lbl">Website</label><input placeholder="https://acme.com" value={form.website||""} onChange={e=>setForm({...form,website:e.target.value})}/></div>
-          {type==="contact"&&<div><label className="lbl">LinkedIn URL</label><input placeholder="https://linkedin.com/in/…" value={form.linkedin||""} onChange={e=>setForm({...form,linkedin:e.target.value})}/></div>}
-          <div><label className="lbl">Phone</label><input placeholder="+61 4xx xxx xxx" value={form.phone||""} onChange={e=>setForm({...form,phone:e.target.value})}/></div>
-          <div><label className="lbl">Email</label><input placeholder="jane@acme.com" value={form.email||""} onChange={e=>setForm({...form,email:e.target.value})}/></div>
-          <div><label className="lbl">Industry</label><select value={form.industry||""} onChange={e=>setForm({...form,industry:e.target.value})}><option value="">Select industry</option>{INDUSTRIES.map(i=><option key={i}>{i}</option>)}</select></div>
-          <div><label className="lbl">Company size</label><select value={form.company_size||""} onChange={e=>setForm({...form,company_size:e.target.value})}><option value="">Select size</option>{["1–10","11–50","51–200","201–500","500+"].map(s=><option key={s}>{s}</option>)}</select></div>
-          <div><label className="lbl">Owner</label><select value={form.owner} onChange={e=>setForm({...form,owner:e.target.value})}>{Object.entries(users).map(([k,v])=><option key={k} value={k}>{v.name}</option>)}</select></div>
-          <div><label className="lbl">Stage</label><select value={form.stage} onChange={e=>setForm({...form,stage:e.target.value})}>{STAGES.map(s=><option key={s}>{s}</option>)}</select></div>
-          <div><label className="lbl">Deal value (AUD)</label><input type="number" placeholder="50000" value={form.deal_value||""} onChange={e=>setForm({...form,deal_value:e.target.value})}/></div>
-          <div><label className="lbl">Last touch</label><input type="date" value={form.last_touch} onChange={e=>setForm({...form,last_touch:e.target.value})}/></div>
+      <div style={{background:"#fff",borderRadius:12,padding:32,width:540,maxWidth:"94vw",boxShadow:"0 24px 64px rgba(0,0,0,0.18)",overflowY:"auto",maxHeight:"92vh"}} onClick={e=>e.stopPropagation()}>
+
+        <div style={{fontSize:26,fontWeight:700,letterSpacing:"-.02em",color:"#1a1a1a",fontFamily:"Cormorant Garamond,serif",marginBottom:4}}>
+          {type==="company" ? "🏢 New company" : "👤 New contact"}
         </div>
-        <div style={{marginBottom:14}}><label className="lbl">Tags</label><TagInput tags={form.tags||[]} onChange={tags=>setForm({...form,tags})}/></div>
-        <div style={{marginBottom:14}}><label className="lbl">Note</label><textarea rows={2} placeholder="How did you meet / context…" value={form.last_note} onChange={e=>setForm({...form,last_note:e.target.value})}/></div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:16}}>
-          <div><label className="lbl">Next action</label><input placeholder="Send deck, call…" value={form.next_action} onChange={e=>setForm({...form,next_action:e.target.value})}/></div>
-          <CalPicker label="Follow-up date *" value={form.next_due} onChange={v=>setForm({...form,next_due:v})}/>
+        <div style={{...S,fontSize:12,color:"#9CA3AF",marginBottom:24}}>
+          {type==="company" ? "Add a new company to your pipeline" : "Add a contact and link them to a company"}
         </div>
-        <div style={{background:"#F8F8F6",borderRadius:8,padding:"10px 14px",marginBottom:20}}>
-          <div style={{fontFamily:"Epilogue,sans-serif",fontSize:12,color:"#6B7280"}}>📅 Default pacing for <strong>{form.stage}</strong>: every <strong>{pacing[form.stage]||30} days</strong>.</div>
-        </div>
+
+        {error && <div style={{...S,fontSize:12,color:"#DC2626",background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:6,padding:"8px 12px",marginBottom:16}}>{error}</div>}
+
+        {type==="company" && (
+          <>
+            <div style={grid2}>
+              <div style={{gridColumn:"1/-1"}}><label style={labelStyle}>Company name *</label><input style={inputStyle} placeholder="e.g. Commbank Connect" value={cName} onChange={e=>setCName(e.target.value)} autoFocus/></div>
+              <div><label style={labelStyle}>Website</label><input style={inputStyle} placeholder="https://..." value={cWebsite} onChange={e=>setCWebsite(e.target.value)}/></div>
+              <div><label style={labelStyle}>Industry</label><select style={inputStyle} value={cIndustry} onChange={e=>setCIndustry(e.target.value)}><option value="">Select…</option>{INDUSTRIES.map(i=><option key={i}>{i}</option>)}</select></div>
+              <div><label style={labelStyle}>Company size</label><select style={inputStyle} value={cSize} onChange={e=>setCSize(e.target.value)}><option value="">Select…</option>{["1–10","11–50","51–200","201–500","500+"].map(s=><option key={s}>{s}</option>)}</select></div>
+              <div><label style={labelStyle}>Deal value (AUD)</label><input style={inputStyle} type="number" placeholder="50000" value={cValue} onChange={e=>setCValue(e.target.value)}/></div>
+              <div><label style={labelStyle}>Owner</label><select style={inputStyle} value={cOwner} onChange={e=>setCOwner(e.target.value)}>{Object.entries(USERS).map(([k,v])=><option key={k} value={k}>{v.name}</option>)}</select></div>
+              <div><label style={labelStyle}>Stage</label><select style={inputStyle} value={cStage} onChange={e=>setCStage(e.target.value)}>{STAGES.map(s=><option key={s}>{s}</option>)}</select></div>
+            </div>
+            <div style={{marginBottom:14}}><label style={labelStyle}>Note</label><textarea style={{...inputStyle,resize:"vertical"}} rows={2} placeholder="How did you find them / context…" value={cNote} onChange={e=>setCNote(e.target.value)}/></div>
+            <div style={{...grid2,marginBottom:20}}>
+              <div><label style={labelStyle}>Next action</label><input style={inputStyle} placeholder="e.g. Send intro email" value={cAction} onChange={e=>setCAction(e.target.value)}/></div>
+              <CalPicker label="Follow-up date" value={cDue} onChange={setCDue}/>
+            </div>
+          </>
+        )}
+
+        {type==="contact" && (
+          <>
+            <div style={{marginBottom:14}}>
+              <label style={labelStyle}>Company *</label>
+              <input style={{...inputStyle, borderColor: ctCompany&&!matchedCompany?"#F59E0B":"#E5E5E5"}}
+                list="company-options"
+                placeholder="Type to search or add new company…"
+                value={ctCompany}
+                onChange={e=>setCtCompany(e.target.value)}
+                autoFocus
+              />
+              <datalist id="company-options">
+                {existingCompanies.map(co=><option key={co} value={co}/>)}
+              </datalist>
+              {ctCompany && !matchedCompany && <div style={{...S,fontSize:11,color:"#F59E0B",marginTop:4}}>⚠ New company — will be created automatically</div>}
+              {matchedCompany && <div style={{...S,fontSize:11,color:"#15803D",marginTop:4}}>✓ Linked to existing company ({matchedCompany.stage})</div>}
+            </div>
+            <div style={grid2}>
+              <div style={{gridColumn:"1/-1"}}><label style={labelStyle}>Contact name *</label><input style={inputStyle} placeholder="e.g. Shannon Hollis" value={ctName} onChange={e=>setCtName(e.target.value)}/></div>
+              <div><label style={labelStyle}>Phone</label><input style={inputStyle} placeholder="+61 4xx xxx xxx" value={ctPhone} onChange={e=>setCtPhone(e.target.value)}/></div>
+              <div><label style={labelStyle}>Email</label><input style={inputStyle} placeholder="shannon@..." value={ctEmail} onChange={e=>setCtEmail(e.target.value)}/></div>
+              <div style={{gridColumn:"1/-1"}}><label style={labelStyle}>LinkedIn URL</label><input style={inputStyle} placeholder="https://linkedin.com/in/…" value={ctLinkedin} onChange={e=>setCtLinkedin(e.target.value)}/></div>
+              <div><label style={labelStyle}>Owner</label><select style={inputStyle} value={ctOwner} onChange={e=>setCtOwner(e.target.value)}>{Object.entries(USERS).map(([k,v])=><option key={k} value={k}>{v.name}</option>)}</select></div>
+            </div>
+            <div style={{marginBottom:14}}><label style={labelStyle}>Note</label><textarea style={{...inputStyle,resize:"vertical"}} rows={2} placeholder="How did you meet / context…" value={ctNote} onChange={e=>setCtNote(e.target.value)}/></div>
+            <div style={{...grid2,marginBottom:20}}>
+              <div><label style={labelStyle}>Next action</label><input style={inputStyle} placeholder="e.g. Follow up call" value={ctAction} onChange={e=>setCtAction(e.target.value)}/></div>
+              <CalPicker label="Follow-up date" value={ctDue} onChange={setCtDue}/>
+            </div>
+          </>
+        )}
+
         <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-          <button onClick={onClose} style={{border:"1px solid #E5E5E5",background:"none",color:"#6B7280",fontFamily:"Epilogue,sans-serif",fontSize:12,padding:"9px 18px",borderRadius:6,cursor:"pointer"}}>Cancel</button>
-          <button onClick={onSave} disabled={saving} style={{border:"none",background:u.color,color:"#fff",fontFamily:"Epilogue,sans-serif",fontSize:12,padding:"9px 18px",borderRadius:6,cursor:saving?"default":"pointer",opacity:saving?0.6:1}}>
-            {saving?"Saving…":`Save ${type}`}
+          <button style={btnGhost} onClick={onClose}>Cancel</button>
+          <button style={btnPrimary} disabled={saving} onClick={type==="company"?saveCompany:saveContact}>
+            {saving?"Saving…":type==="company"?"Save company":"Save contact"}
           </button>
         </div>
       </div>
@@ -1205,7 +1314,7 @@ export default function App() {
       {page==="pipeline"&&<PipelineView contacts={contacts} currentUser={cu} onOpen={open} onGoToCompany={name=>{setPage("companies");}}/>}
       {page==="settings"&&<SettingsView pacing={pacing} onSave={savePacingState}/>}
 
-      {showAdd&&<AddModal type={showAdd} form={form} setForm={setForm} onClose={()=>setShowAdd(false)} onSave={saveForm} saving={saving} pacing={pacing} users={USERS}/>}
+      {showAdd&&<AddModal type={showAdd} allContacts={contacts} onClose={()=>setShowAdd(false)} onSaved={async()=>{await fetchData();setShowAdd(false);}} currentUser={cu} pacing={pacing}/>}
       {logCompany&&<LogModal company={logCompany} contacts={contacts} currentUser={cu} pacing={pacing} onClose={()=>setLogCompany(null)} onSaved={async()=>{await fetchData();setLogCompany(null);}}/>}
     </div>
   );
