@@ -763,6 +763,51 @@ function LogModal({company, contacts, currentUser, pacing, onClose, onSaved}) {
 }
 
 
+// ── ADD CONTACT/COMPANY MODAL (portal) ────────────────────────────────────────
+
+function AddModal({type, form, setForm, onClose, onSave, saving, pacing, users}) {
+  const u = users[form.owner] || users.nick;
+  return createPortal(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000}} onClick={onClose}>
+      <div style={{background:"#fff",borderRadius:12,padding:32,width:600,maxWidth:"94vw",boxShadow:"0 24px 64px rgba(0,0,0,0.18)",overflowY:"auto",maxHeight:"92vh",fontFamily:"Cormorant Garamond,Georgia,serif"}} onClick={e=>e.stopPropagation()}>
+        <div style={{fontSize:26,fontWeight:700,letterSpacing:"-.02em",color:"#1a1a1a",marginBottom:6}}>{type==="company"?"🏢 New company":"👤 New contact"}</div>
+        <div style={{fontFamily:"Epilogue,sans-serif",fontSize:12,color:"#9CA3AF",marginBottom:24}}>Fields marked * are required</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+          <div><label className="lbl">Company *</label><input placeholder="Acme Corp" value={form.company} onChange={e=>setForm({...form,company:e.target.value})}/></div>
+          {type==="contact"&&<div><label className="lbl">Contact name</label><input placeholder="Jane Smith" value={form.contact} onChange={e=>setForm({...form,contact:e.target.value})}/></div>}
+          <div><label className="lbl">Website</label><input placeholder="https://acme.com" value={form.website||""} onChange={e=>setForm({...form,website:e.target.value})}/></div>
+          {type==="contact"&&<div><label className="lbl">LinkedIn URL</label><input placeholder="https://linkedin.com/in/…" value={form.linkedin||""} onChange={e=>setForm({...form,linkedin:e.target.value})}/></div>}
+          <div><label className="lbl">Phone</label><input placeholder="+61 4xx xxx xxx" value={form.phone||""} onChange={e=>setForm({...form,phone:e.target.value})}/></div>
+          <div><label className="lbl">Email</label><input placeholder="jane@acme.com" value={form.email||""} onChange={e=>setForm({...form,email:e.target.value})}/></div>
+          <div><label className="lbl">Industry</label><select value={form.industry||""} onChange={e=>setForm({...form,industry:e.target.value})}><option value="">Select industry</option>{INDUSTRIES.map(i=><option key={i}>{i}</option>)}</select></div>
+          <div><label className="lbl">Company size</label><select value={form.company_size||""} onChange={e=>setForm({...form,company_size:e.target.value})}><option value="">Select size</option>{["1–10","11–50","51–200","201–500","500+"].map(s=><option key={s}>{s}</option>)}</select></div>
+          <div><label className="lbl">Owner</label><select value={form.owner} onChange={e=>setForm({...form,owner:e.target.value})}>{Object.entries(users).map(([k,v])=><option key={k} value={k}>{v.name}</option>)}</select></div>
+          <div><label className="lbl">Stage</label><select value={form.stage} onChange={e=>setForm({...form,stage:e.target.value})}>{STAGES.map(s=><option key={s}>{s}</option>)}</select></div>
+          <div><label className="lbl">Deal value (AUD)</label><input type="number" placeholder="50000" value={form.deal_value||""} onChange={e=>setForm({...form,deal_value:e.target.value})}/></div>
+          <div><label className="lbl">Last touch</label><input type="date" value={form.last_touch} onChange={e=>setForm({...form,last_touch:e.target.value})}/></div>
+        </div>
+        <div style={{marginBottom:14}}><label className="lbl">Tags</label><TagInput tags={form.tags||[]} onChange={tags=>setForm({...form,tags})}/></div>
+        <div style={{marginBottom:14}}><label className="lbl">Note</label><textarea rows={2} placeholder="How did you meet / context…" value={form.last_note} onChange={e=>setForm({...form,last_note:e.target.value})}/></div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:16}}>
+          <div><label className="lbl">Next action</label><input placeholder="Send deck, call…" value={form.next_action} onChange={e=>setForm({...form,next_action:e.target.value})}/></div>
+          <CalPicker label="Follow-up date *" value={form.next_due} onChange={v=>setForm({...form,next_due:v})}/>
+        </div>
+        <div style={{background:"#F8F8F6",borderRadius:8,padding:"10px 14px",marginBottom:20}}>
+          <div style={{fontFamily:"Epilogue,sans-serif",fontSize:12,color:"#6B7280"}}>📅 Default pacing for <strong>{form.stage}</strong>: every <strong>{pacing[form.stage]||30} days</strong>.</div>
+        </div>
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <button onClick={onClose} style={{border:"1px solid #E5E5E5",background:"none",color:"#6B7280",fontFamily:"Epilogue,sans-serif",fontSize:12,padding:"9px 18px",borderRadius:6,cursor:"pointer"}}>Cancel</button>
+          <button onClick={onSave} disabled={saving} style={{border:"none",background:u.color,color:"#fff",fontFamily:"Epilogue,sans-serif",fontSize:12,padding:"9px 18px",borderRadius:6,cursor:saving?"default":"pointer",opacity:saving?0.6:1}}>
+            {saving?"Saving…":`Save ${type}`}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+
 const EMPTY = {company:"",contact:"",phone:"",email:"",linkedin:"",website:"",industry:"",company_size:"",deal_value:"",last_touch:TODAY,last_note:"",next_action:"",next_due:"",stage:"Outreach",owner:"nick",tags:[],archived:false,follow_up_interval:""};
 
 export default function App() {
@@ -1160,41 +1205,7 @@ export default function App() {
       {page==="pipeline"&&<PipelineView contacts={contacts} currentUser={cu} onOpen={open} onGoToCompany={name=>{setPage("companies");}}/>}
       {page==="settings"&&<SettingsView pacing={pacing} onSave={savePacingState}/>}
 
-      {showAdd&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}} onClick={()=>setShowAdd(false)}>
-          <div style={{background:"#fff",border:"1px solid #E5E5E5",borderRadius:12,padding:32,width:600,maxWidth:"94vw",boxShadow:"0 20px 60px rgba(0,0,0,0.12)",overflowY:"auto",maxHeight:"92vh",position:"relative",zIndex:1001}} onClick={e=>e.stopPropagation()}>
-            <div style={{fontSize:26,fontWeight:700,letterSpacing:"-.02em",color:"#1a1a1a",marginBottom:6}}>{showAdd==="company"?"🏢 New company":"👤 New contact"}</div>
-            <div className="e" style={{fontSize:12,color:"#9CA3AF",marginBottom:24}}>Fields marked * are required</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
-              <div><label className="lbl">Company *</label><input placeholder="Acme Corp" value={form.company} onChange={e=>setForm({...form,company:e.target.value})}/></div>
-              {showAdd==="contact"&&<div><label className="lbl">Contact name</label><input placeholder="Jane Smith" value={form.contact} onChange={e=>setForm({...form,contact:e.target.value})}/></div>}
-              <div><label className="lbl">Website</label><input placeholder="https://acme.com" value={form.website||""} onChange={e=>setForm({...form,website:e.target.value})}/></div>
-              {showAdd==="contact"&&<div><label className="lbl">LinkedIn URL</label><input placeholder="https://linkedin.com/in/…" value={form.linkedin||""} onChange={e=>setForm({...form,linkedin:e.target.value})}/></div>}
-              <div><label className="lbl">Phone</label><input placeholder="+61 4xx xxx xxx" value={form.phone||""} onChange={e=>setForm({...form,phone:e.target.value})}/></div>
-              <div><label className="lbl">Email</label><input placeholder="jane@acme.com" value={form.email||""} onChange={e=>setForm({...form,email:e.target.value})}/></div>
-              <div><label className="lbl">Industry</label><select value={form.industry||""} onChange={e=>setForm({...form,industry:e.target.value})}><option value="">Select industry</option>{INDUSTRIES.map(i=><option key={i}>{i}</option>)}</select></div>
-              <div><label className="lbl">Company size</label><select value={form.company_size||""} onChange={e=>setForm({...form,company_size:e.target.value})}><option value="">Select size</option>{["1–10","11–50","51–200","201–500","500+"].map(s=><option key={s}>{s}</option>)}</select></div>
-              <div><label className="lbl">Owner</label><select value={form.owner} onChange={e=>setForm({...form,owner:e.target.value})}>{Object.entries(USERS).map(([k,v])=><option key={k} value={k}>{v.name}</option>)}</select></div>
-              <div><label className="lbl">Stage</label><select value={form.stage} onChange={e=>setForm({...form,stage:e.target.value})}>{STAGES.map(s=><option key={s}>{s}</option>)}</select></div>
-              <div><label className="lbl">Deal value (AUD)</label><input type="number" placeholder="50000" value={form.deal_value||""} onChange={e=>setForm({...form,deal_value:e.target.value})}/></div>
-              <div><label className="lbl">Last touch</label><input type="date" value={form.last_touch} onChange={e=>setForm({...form,last_touch:e.target.value})}/></div>
-            </div>
-            <div style={{marginBottom:14}}><label className="lbl">Tags</label><TagInput tags={form.tags||[]} onChange={tags=>setForm({...form,tags})}/></div>
-            <div style={{marginBottom:14}}><label className="lbl">Note</label><textarea rows={2} placeholder="How did you meet / context…" value={form.last_note} onChange={e=>setForm({...form,last_note:e.target.value})}/></div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:16}}>
-              <div><label className="lbl">Next action</label><input placeholder="Send deck, call…" value={form.next_action} onChange={e=>setForm({...form,next_action:e.target.value})}/></div>
-              <CalPicker label="Follow-up date *" value={form.next_due} onChange={v=>setForm({...form,next_due:v})}/>
-            </div>
-            <div style={{background:"#F8F8F6",borderRadius:8,padding:"10px 14px",marginBottom:20}}>
-              <div className="e" style={{fontSize:12,color:"#6B7280"}}>📅 Default pacing for <strong>{form.stage}</strong>: every <strong>{pacing[form.stage]||30} days</strong>. Customise per-contact in the Profile tab after saving.</div>
-            </div>
-            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-              <button className="btn ghost e" onClick={()=>setShowAdd(false)}>Cancel</button>
-              <button className="btn e" style={{background:u.color,color:"#fff",opacity:saving?0.6:1}} onClick={saveForm} disabled={saving}>{saving?"Saving…":`Save ${showAdd}`}</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {showAdd&&<AddModal type={showAdd} form={form} setForm={setForm} onClose={()=>setShowAdd(false)} onSave={saveForm} saving={saving} pacing={pacing} users={USERS}/>}
       {logCompany&&<LogModal company={logCompany} contacts={contacts} currentUser={cu} pacing={pacing} onClose={()=>setLogCompany(null)} onSaved={async()=>{await fetchData();setLogCompany(null);}}/>}
     </div>
   );
