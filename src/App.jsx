@@ -917,6 +917,272 @@ function AddModal({type, allContacts, onClose, onSaved, currentUser, pacing}) {
 }
 
 
+// ── CANDIDATES VIEW ───────────────────────────────────────────────────────────
+
+const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1BICeqw44-N21r_NsqfKzxkhXPLfX3QI7xwGmHFalO3w/export?format=csv&sheet=Sheet1";
+
+const JOB_FUNCTIONS = ["All","Sales","Account Management","Operations","Data","Marketing","Other"];
+
+function parseCSV(text) {
+  const lines = text.trim().split("\n");
+  const headers = lines[0].split(",").map(h => h.trim().replace(/^"|"$/g,""));
+  return lines.slice(1).map((line, idx) => {
+    // Handle quoted fields
+    const cols = [];
+    let cur = "", inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === '"') { inQ = !inQ; }
+      else if (line[i] === "," && !inQ) { cols.push(cur.trim()); cur = ""; }
+      else { cur += line[i]; }
+    }
+    cols.push(cur.trim());
+    return {
+      _id: `row-${idx}`,
+      date: cols[0]||"",
+      name: cols[1]||"",
+      jobFunction: cols[2]||"",
+      currentPosition: cols[3]||"",
+      company: cols[4]||"",
+      salary: cols[5]||"",
+      noticePeriod: cols[6]||"",
+      city: cols[7]||"",
+      skills: cols[8]||"",
+    };
+  }).filter(r => r.name);
+}
+
+function parseSalary(s) {
+  if (!s) return null;
+  const m = s.toString().replace(/[,$k]/gi,"").match(/\d+/);
+  if (!m) return null;
+  const n = parseInt(m[0]);
+  return n < 1000 ? n * 1000 : n;
+}
+
+function fmtSalary(s) {
+  const n = parseSalary(s);
+  if (!n) return s||"—";
+  return "$" + Math.round(n/1000) + "k";
+}
+
+function parseNotice(s) {
+  if (!s) return null;
+  const str = s.toString().toLowerCase();
+  if (str.includes("immediate") || str === "0") return 0;
+  const m = str.match(/(\d+)/);
+  if (!m) return null;
+  const n = parseInt(m[1]);
+  // if it's already weeks (small number), use as is; if months multiply
+  if (str.includes("month")) return n * 4;
+  return n;
+}
+
+function fmtNotice(s) {
+  const w = parseNotice(s);
+  if (w === null) return s||"—";
+  if (w === 0) return "Immediate";
+  if (w < 4) return `${w}w`;
+  const months = Math.round(w/4);
+  return months === 1 ? "1 month" : `${months} months`;
+}
+
+function CandidatePanel({candidate, note, onNoteChange, onSave, saving, onClose}) {
+  return createPortal(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"flex-end",justifyContent:"flex-end",zIndex:9000}} onClick={onClose}>
+      <div style={{width:420,height:"100vh",background:"#fff",boxShadow:"-8px 0 40px rgba(0,0,0,0.12)",overflowY:"auto",padding:32,display:"flex",flexDirection:"column",gap:20}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{fontSize:22,fontWeight:700,letterSpacing:"-.02em",color:"#1a1a1a",fontFamily:"Cormorant Garamond,serif"}}>{candidate.name}</div>
+          <button onClick={onClose} style={{border:"none",background:"none",fontSize:20,color:"#9CA3AF",cursor:"pointer",padding:4}}>×</button>
+        </div>
+
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {[
+            ["Role", candidate.currentPosition||"—"],
+            ["Company", candidate.company||"—"],
+            ["Function", candidate.jobFunction||"—"],
+            ["Salary", fmtSalary(candidate.salary)],
+            ["Notice", fmtNotice(candidate.noticePeriod)],
+            ["City", candidate.city||"—"],
+            ["Added", candidate.date||"—"],
+          ].map(([label, val]) => (
+            <div key={label} style={{display:"flex",gap:12,alignItems:"flex-start"}}>
+              <span style={{fontFamily:"Epilogue,sans-serif",fontSize:10,letterSpacing:".1em",textTransform:"uppercase",color:"#9CA3AF",minWidth:60,paddingTop:2}}>>{label}</span>
+              <span style={{fontFamily:"Epilogue,sans-serif",fontSize:13,color:"#1a1a1a",flex:1}}>{val}</span>
+            </div>
+          ))}
+          {candidate.skills && (
+            <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
+              <span style={{fontFamily:"Epilogue,sans-serif",fontSize:10,letterSpacing:".1em",textTransform:"uppercase",color:"#9CA3AF",minWidth:60,paddingTop:2}}>Skills</span>
+              <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                {candidate.skills.split(",").map(s => s.trim()).filter(Boolean).map(s => (
+                  <span key={s} className="chip">{s}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{borderTop:"1px solid #EBEBEB",paddingTop:20}}>
+          <label style={{fontFamily:"Epilogue,sans-serif",fontSize:10,letterSpacing:".1em",textTransform:"uppercase",color:"#9CA3AF",display:"block",marginBottom:8}}>Notes</label>
+          <textarea
+            value={note} onChange={e=>onNoteChange(e.target.value)}
+            rows={5} placeholder="Add notes about this candidate…"
+            style={{width:"100%",fontFamily:"Epilogue,sans-serif",fontSize:13,padding:"10px 12px",border:"1px solid #E5E5E5",borderRadius:6,resize:"vertical",outline:"none"}}
+          />
+          <button onClick={onSave} disabled={saving} style={{marginTop:10,border:"none",background:"#1a1a1a",color:"#fff",fontFamily:"Epilogue,sans-serif",fontSize:12,padding:"9px 20px",borderRadius:6,cursor:saving?"default":"pointer",opacity:saving?0.6:1,width:"100%"}}>
+            {saving?"Saving…":"Save note"}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function CandidatesView({currentUser}) {
+  const [candidates, setCandidates] = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState("");
+  const [search, setSearch]         = useState("");
+  const [fnFilter, setFnFilter]     = useState("All");
+  const [noticeMax, setNoticeMax]   = useState("any");
+  const [selected, setSelected]     = useState(null);
+  const [notes, setNotes]           = useState({});
+  const [noteInput, setNoteInput]   = useState("");
+  const [saving, setSaving]         = useState(false);
+
+  // Load sheet data
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const res = await window.fetch(SHEET_CSV_URL);
+        const text = await res.text();
+        const rows = parseCSV(text);
+        setCandidates(rows);
+      } catch(e) {
+        setError("Couldn't load sheet — make sure it's shared publicly or try refreshing.");
+      }
+      setLoading(false);
+    };
+    load();
+  }, []);
+
+  // Load notes from Supabase
+  useEffect(() => {
+    const loadNotes = async () => {
+      const {data} = await supabase.from("candidate_notes").select("*");
+      if (data) {
+        const map = {};
+        data.forEach(n => { map[n.candidate_name] = n.note; });
+        setNotes(map);
+      }
+    };
+    loadNotes();
+  }, []);
+
+  const openCandidate = c => {
+    setSelected(c);
+    setNoteInput(notes[c.name] || "");
+  };
+
+  const saveNote = async () => {
+    if (!selected) return;
+    setSaving(true);
+    await supabase.from("candidate_notes").upsert({
+      candidate_name: selected.name,
+      note: noteInput,
+      updated_by: currentUser,
+      updated_at: new Date().toISOString(),
+    }, {onConflict: "candidate_name"});
+    setNotes(n => ({...n, [selected.name]: noteInput}));
+    setSaving(false);
+  };
+
+  // Filter
+  const filtered = candidates.filter(c => {
+    if (fnFilter !== "All" && c.jobFunction !== fnFilter) return false;
+    if (noticeMax !== "any") {
+      const w = parseNotice(c.noticePeriod);
+      if (w === null || w > parseInt(noticeMax)) return false;
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      return [c.name, c.jobFunction, c.currentPosition, c.company, c.skills].some(f => f?.toLowerCase().includes(q));
+    }
+    return true;
+  });
+
+  const u = USERS[currentUser] || USERS.nick;
+
+  if (loading) return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"80px 24px",gap:12}}>
+      <div className="spinner"/>
+      <span className="e" style={{fontSize:13,color:"#9CA3AF"}}>Loading candidates…</span>
+    </div>
+  );
+
+  if (error) return (
+    <div className="fu" style={{maxWidth:760,margin:"0 auto",padding:"40px 24px"}}>
+      <EmptyState icon="⚠️" title="Couldn't load sheet" sub={error}/>
+    </div>
+  );
+
+  return (
+    <div className="fu" style={{maxWidth:1000,margin:"0 auto",padding:"40px 24px"}}>
+      <div style={{marginBottom:24}}>
+        <div style={{fontSize:34,fontWeight:700,letterSpacing:"-.02em",color:"#1a1a1a"}}>Candidates</div>
+        <div className="e" style={{fontSize:13,color:"#9CA3AF",marginTop:4}}>{filtered.length} of {candidates.length} candidates · live from Google Sheet</div>
+      </div>
+
+      <div style={{marginBottom:14}}><SearchBar value={search} onChange={setSearch}/></div>
+
+      <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap",alignItems:"center"}}>
+        {JOB_FUNCTIONS.map(f => (
+          <button key={f} className={`filter-btn e ${fnFilter===f?"on":""}`} onClick={()=>setFnFilter(f)}>>{f}</button>
+        ))}
+        <span style={{width:1,background:"#E5E5E5",margin:"0 4px"}}/>
+        <span className="e" style={{fontSize:11,color:"#9CA3AF"}}>Notice ≤</span>
+        {[["any","Any"],["4","1 month"],["8","2 months"],["12","3 months"]].map(([v,l]) => (
+          <button key={v} className={`filter-btn e ${noticeMax===v?"on":""}`} onClick={()=>setNoticeMax(v)}>{l}</button>
+        ))}
+      </div>
+
+      <div style={{background:"#fff",border:"1px solid #EBEBEB",borderRadius:10,overflow:"hidden"}}>
+        <div className="e" style={{padding:"10px 24px",display:"grid",gridTemplateColumns:"1fr 140px 120px 80px 80px 80px",gap:16,fontSize:10,color:"#C4C4C4",letterSpacing:".12em",textTransform:"uppercase",borderBottom:"1px solid #EBEBEB",background:"#FAFAF8"}}>
+          <span>Name / Role</span><span>Company</span><span>Function</span><span>Salary</span><span>Notice</span><span>Notes</span>
+        </div>
+        {filtered.length === 0 && <div className="e" style={{padding:"40px 24px",textAlign:"center",color:"#D1D5DB",fontSize:13}}>No candidates match these filters.</div>}
+        {filtered.map((c, i) => (
+          <div key={c._id} className="row" style={{padding:"12px 24px",display:"grid",gridTemplateColumns:"1fr 140px 120px 80px 80px 80px",gap:16,alignItems:"center",borderBottom:i<filtered.length-1?"1px solid #EBEBEB":"none"}} onClick={()=>openCandidate(c)}>
+            <div>
+              <div style={{fontSize:14,fontWeight:600,color:"#1a1a1a"}}>{c.name}</div>
+              <div className="e" style={{fontSize:11,color:"#9CA3AF",marginTop:1}}>{c.currentPosition||"—"}</div>
+            </div>
+            <div className="e" style={{fontSize:12,color:"#6B7280",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.company||"—"}</div>
+            <div>{c.jobFunction && <span className="tag e" style={{background:c.jobFunction==="Sales"?"#EFF6FF":c.jobFunction==="Account Management"?"#F0FDF4":c.jobFunction==="Operations"?"#FFF7ED":"#F3F4F6",color:c.jobFunction==="Sales"?"#1D4ED8":c.jobFunction==="Account Management"?"#15803D":c.jobFunction==="Operations"?"#C2410C":"#6B7280"}}>{c.jobFunction}</span>}</div>
+            <div className="e" style={{fontSize:12,color:parseSalary(c.salary)?"#1a1a1a":"#D1D5DB"}}>{fmtSalary(c.salary)}</div>
+            <div className="e" style={{fontSize:12,color:"#6B7280"}}>{fmtNotice(c.noticePeriod)}</div>
+            <div>{notes[c.name] && <span style={{width:8,height:8,borderRadius:"50%",background:u.color,display:"inline-block"}}/>}</div>
+          </div>
+        ))}
+      </div>
+
+      {selected && (
+        <CandidatePanel
+          candidate={selected}
+          note={noteInput}
+          onNoteChange={setNoteInput}
+          onSave={saveNote}
+          saving={saving}
+          onClose={()=>setSelected(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+
 const EMPTY = {company:"",contact:"",phone:"",email:"",linkedin:"",website:"",industry:"",company_size:"",deal_value:"",last_touch:TODAY,last_note:"",next_action:"",next_due:"",stage:"Outreach",owner:"nick",tags:[],archived:false,follow_up_interval:""};
 
 export default function App() {
@@ -1144,7 +1410,7 @@ export default function App() {
       <div style={{background:"#fff",borderBottom:"1px solid #EBEBEB",padding:"12px 40px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:50}}>
         <div style={{cursor:"pointer"}} onClick={()=>setPage("home")}><img src="/logo.png" alt="2Square" style={{height:32,width:"auto",objectFit:"contain"}}/></div>
         <div style={{display:"flex",gap:4}}>
-          {[["home","Home"],["followups","Follow-ups"],["contacts","Contacts"],["companies","Companies"],["pipeline","Pipeline"],["settings","Settings"]].map(([k,l])=>(
+          {[["home","Home"],["followups","Follow-ups"],["contacts","Contacts"],["companies","Companies"],["pipeline","Pipeline"],["candidates","Candidates"],["settings","Settings"]].map(([k,l])=>(
             <button key={k} className={`nav-btn e ${page===k?"active":""}`} onClick={()=>setPage(k)}>{l}{k==="followups"&&myDue.length>0&&<span style={{background:"#DC2626",color:"#fff",borderRadius:10,fontSize:10,padding:"1px 6px",marginLeft:4}}>{myDue.length}</span>}</button>
           ))}
         </div>
@@ -1313,6 +1579,7 @@ export default function App() {
       {page==="companies"&&<CompaniesView contacts={allA} onOpen={open} onLogTouchpoint={openCompanyLog} pacing={pacing} onRefresh={fetchData}/>}
       {page==="pipeline"&&<PipelineView contacts={contacts} currentUser={cu} onOpen={open} onGoToCompany={name=>{setPage("companies");}}/>}
       {page==="settings"&&<SettingsView pacing={pacing} onSave={savePacingState}/>}
+      {page==="candidates"&&<CandidatesView currentUser={cu}/>}
 
       {showAdd&&<AddModal type={showAdd} allContacts={contacts} onClose={()=>setShowAdd(false)} onSaved={async()=>{await fetchData();setShowAdd(false);}} currentUser={cu} pacing={pacing}/>}
       {logCompany&&<LogModal company={logCompany} contacts={contacts} currentUser={cu} pacing={pacing} onClose={()=>setLogCompany(null)} onSaved={async()=>{await fetchData();setLogCompany(null);}}/>}
