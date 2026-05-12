@@ -390,7 +390,19 @@ function ProfileEditor({contact:c,onSave,saving,pacing}) {
 function CompanyCard({company, onOpen, onLogTouchpoint, allContacts, pacing, onStageChange}) {
   const [exp, setExp] = useState(false);
   const [stageSaving, setStageSaving] = useState(false);
+  const [bioEdit, setBioEdit] = useState(false);
+  const [bioText, setBioText] = useState(company.contacts[0]?.company_bio || "");
+  const [bioSaving, setBioSaving] = useState(false);
   const ws = company.contacts.map(c => c.website).find(Boolean);
+  const companySize = company.contacts.map(c => c.company_size).find(Boolean);
+  const industry = company.contacts.map(c => c.industry).find(Boolean);
+
+  const saveBio = async () => {
+    setBioSaving(true);
+    await supabase.from("contacts").update({company_bio: bioText}).eq("id", company.contacts[0].id);
+    setBioSaving(false);
+    setBioEdit(false);
+  };
 
   // Merge all history from all contacts under this company, sorted newest first
   const allHistory = company.contacts
@@ -427,7 +439,9 @@ function CompanyCard({company, onOpen, onLogTouchpoint, allContacts, pacing, onS
             <div style={{fontSize:15,fontWeight:600,color:"#1a1a1a"}}>{company.name}</div>
             <div style={{display:"flex",gap:8,marginTop:2,alignItems:"center",flexWrap:"wrap"}}>
               {ws&&<a href={ws} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} className="e" style={{fontSize:11,color:"#4F46E5",textDecoration:"none"}}>🌐 {ws.replace(/^https?:\/\/|\/$/g,"")}</a>}
-              {company.contacts.length>1&&<span className="e" style={{fontSize:11,color:"#9CA3AF"}}>{company.contacts.length} contacts</span>}
+              {industry&&<span className="e" style={{fontSize:11,color:"#9CA3AF"}}>{industry}</span>}
+              {companySize&&<span className="e" style={{fontSize:11,color:"#9CA3AF"}}>· {companySize}</span>}
+              {company.contacts.length>1&&<span className="e" style={{fontSize:11,color:"#9CA3AF"}}>· {company.contacts.length} contacts</span>}
             </div>
           </div>
         </div>
@@ -455,6 +469,45 @@ function CompanyCard({company, onOpen, onLogTouchpoint, allContacts, pacing, onS
 
       {exp&&(
         <div style={{borderTop:"1px solid #EBEBEB",background:"#FAFAF8"}}>
+
+          {/* Bio / About section */}
+          <div style={{padding:"16px 24px",borderBottom:"1px solid #EBEBEB",display:"flex",alignItems:"flex-start",gap:16}}>
+            <div style={{flex:1}}>
+              {!bioEdit ? (
+                <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
+                  <div style={{flex:1}}>
+                    {bioText
+                      ? <div className="e" style={{fontSize:13,color:"#374151",lineHeight:1.6}}>{bioText}</div>
+                      : <div className="e" style={{fontSize:13,color:"#D1D5DB",fontStyle:"italic"}}>No company notes yet — click to add</div>
+                    }
+                  </div>
+                  <button onClick={e=>{e.stopPropagation();setBioEdit(true);}} style={{border:"1px solid #E5E5E5",background:"none",fontFamily:"Epilogue,sans-serif",fontSize:11,color:"#9CA3AF",padding:"4px 10px",borderRadius:6,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>
+                    {bioText ? "Edit" : "+ Add notes"}
+                  </button>
+                </div>
+              ) : (
+                <div onClick={e=>e.stopPropagation()}>
+                  <textarea
+                    value={bioText}
+                    onChange={e=>setBioText(e.target.value)}
+                    autoFocus
+                    placeholder="Add notes about this company — what they do, key context, relationship history…"
+                    rows={3}
+                    style={{width:"100%",fontFamily:"Epilogue,sans-serif",fontSize:13,padding:"8px 12px",border:"1px solid #1a1a1a",borderRadius:6,resize:"vertical",outline:"none",background:"#fff"}}
+                  />
+                  <div style={{display:"flex",gap:8,marginTop:8}}>
+                    <button onClick={saveBio} disabled={bioSaving} style={{border:"none",background:"#1a1a1a",color:"#fff",fontFamily:"Epilogue,sans-serif",fontSize:11,padding:"5px 14px",borderRadius:6,cursor:"pointer",opacity:bioSaving?0.6:1}}>
+                      {bioSaving?"Saving…":"Save"}
+                    </button>
+                    <button onClick={e=>{e.stopPropagation();setBioEdit(false);setBioText(company.contacts[0]?.company_bio||"");}} style={{border:"1px solid #E5E5E5",background:"none",fontFamily:"Epilogue,sans-serif",fontSize:11,color:"#6B7280",padding:"5px 14px",borderRadius:6,cursor:"pointer"}}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
           <div style={{display:"grid",gridTemplateColumns:"1fr 320px",gap:0}}>
 
             {/* LEFT: Timeline */}
