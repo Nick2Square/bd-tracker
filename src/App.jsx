@@ -393,15 +393,40 @@ function CompanyCard({company, onOpen, onLogTouchpoint, allContacts, pacing, onS
   const [bioEdit, setBioEdit] = useState(false);
   const [bioText, setBioText] = useState(company.contacts[0]?.company_bio || "");
   const [bioSaving, setBioSaving] = useState(false);
-  const ws = company.contacts.map(c => c.website).find(Boolean);
-  const companySize = company.contacts.map(c => c.company_size).find(Boolean);
-  const industry = company.contacts.map(c => c.industry).find(Boolean);
+  const [detailsEdit, setDetailsEdit] = useState(false);
+  const [detailsForm, setDetailsForm] = useState({
+    website:      company.contacts.map(c=>c.website).find(Boolean) || "",
+    industry:     company.contacts.map(c=>c.industry).find(Boolean) || "",
+    company_size: company.contacts.map(c=>c.company_size).find(Boolean) || "",
+    deal_value:   company.contacts.map(c=>c.deal_value).find(Boolean) || "",
+  });
+  const [detailsSaving, setDetailsSaving] = useState(false);
+
+  const ws = detailsForm.website;
+  const companySize = detailsForm.company_size;
+  const industry = detailsForm.industry;
 
   const saveBio = async () => {
     setBioSaving(true);
     await supabase.from("contacts").update({company_bio: bioText}).eq("id", company.contacts[0].id);
     setBioSaving(false);
     setBioEdit(false);
+  };
+
+  const saveDetails = async () => {
+    setDetailsSaving(true);
+    // Update all contacts under this company with the shared fields
+    await Promise.all(company.contacts.map(c =>
+      supabase.from("contacts").update({
+        website:      detailsForm.website,
+        industry:     detailsForm.industry,
+        company_size: detailsForm.company_size,
+        deal_value:   detailsForm.deal_value || c.deal_value,
+      }).eq("id", c.id)
+    ));
+    setDetailsSaving(false);
+    setDetailsEdit(false);
+    onStageChange(); // refresh
   };
 
   // Merge all history from all contacts under this company, sorted newest first
@@ -470,42 +495,89 @@ function CompanyCard({company, onOpen, onLogTouchpoint, allContacts, pacing, onS
       {exp&&(
         <div style={{borderTop:"1px solid #EBEBEB",background:"#FAFAF8"}}>
 
-          {/* Bio / About section */}
-          <div style={{padding:"16px 24px",borderBottom:"1px solid #EBEBEB",display:"flex",alignItems:"flex-start",gap:16}}>
-            <div style={{flex:1}}>
+          {/* Bio + Details section */}
+          <div style={{padding:"16px 24px",borderBottom:"1px solid #EBEBEB",display:"grid",gridTemplateColumns:"1fr 1fr",gap:24}} onClick={e=>e.stopPropagation()}>
+
+            {/* Left: Notes/bio */}
+            <div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                <span className="e" style={{fontSize:10,letterSpacing:".1em",textTransform:"uppercase",color:"#9CA3AF"}}>About</span>
+                {!bioEdit&&<button onClick={()=>setBioEdit(true)} style={{border:"none",background:"none",fontFamily:"Epilogue,sans-serif",fontSize:11,color:"#9CA3AF",cursor:"pointer",padding:0}}>{bioText?"Edit":"+ Add"}</button>}
+              </div>
               {!bioEdit ? (
-                <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
-                  <div style={{flex:1}}>
-                    {bioText
-                      ? <div className="e" style={{fontSize:13,color:"#374151",lineHeight:1.6}}>{bioText}</div>
-                      : <div className="e" style={{fontSize:13,color:"#D1D5DB",fontStyle:"italic"}}>No company notes yet — click to add</div>
-                    }
-                  </div>
-                  <button onClick={e=>{e.stopPropagation();setBioEdit(true);}} style={{border:"1px solid #E5E5E5",background:"none",fontFamily:"Epilogue,sans-serif",fontSize:11,color:"#9CA3AF",padding:"4px 10px",borderRadius:6,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>
-                    {bioText ? "Edit" : "+ Add notes"}
-                  </button>
-                </div>
+                bioText
+                  ? <div className="e" style={{fontSize:13,color:"#374151",lineHeight:1.6}}>{bioText}</div>
+                  : <div className="e" style={{fontSize:13,color:"#D1D5DB",fontStyle:"italic"}}>No notes yet</div>
               ) : (
-                <div onClick={e=>e.stopPropagation()}>
-                  <textarea
-                    value={bioText}
-                    onChange={e=>setBioText(e.target.value)}
-                    autoFocus
-                    placeholder="Add notes about this company — what they do, key context, relationship history…"
-                    rows={3}
-                    style={{width:"100%",fontFamily:"Epilogue,sans-serif",fontSize:13,padding:"8px 12px",border:"1px solid #1a1a1a",borderRadius:6,resize:"vertical",outline:"none",background:"#fff"}}
-                  />
+                <div>
+                  <textarea value={bioText} onChange={e=>setBioText(e.target.value)} autoFocus
+                    placeholder="What they do, key context, relationship history…" rows={3}
+                    style={{width:"100%",fontFamily:"Epilogue,sans-serif",fontSize:13,padding:"8px 12px",border:"1px solid #1a1a1a",borderRadius:6,resize:"vertical",outline:"none",background:"#fff"}}/>
                   <div style={{display:"flex",gap:8,marginTop:8}}>
-                    <button onClick={saveBio} disabled={bioSaving} style={{border:"none",background:"#1a1a1a",color:"#fff",fontFamily:"Epilogue,sans-serif",fontSize:11,padding:"5px 14px",borderRadius:6,cursor:"pointer",opacity:bioSaving?0.6:1}}>
-                      {bioSaving?"Saving…":"Save"}
-                    </button>
-                    <button onClick={e=>{e.stopPropagation();setBioEdit(false);setBioText(company.contacts[0]?.company_bio||"");}} style={{border:"1px solid #E5E5E5",background:"none",fontFamily:"Epilogue,sans-serif",fontSize:11,color:"#6B7280",padding:"5px 14px",borderRadius:6,cursor:"pointer"}}>
-                      Cancel
-                    </button>
+                    <button onClick={saveBio} disabled={bioSaving} style={{border:"none",background:"#1a1a1a",color:"#fff",fontFamily:"Epilogue,sans-serif",fontSize:11,padding:"5px 14px",borderRadius:6,cursor:"pointer",opacity:bioSaving?0.6:1}}>{bioSaving?"Saving…":"Save"}</button>
+                    <button onClick={()=>{setBioEdit(false);setBioText(company.contacts[0]?.company_bio||"");}} style={{border:"1px solid #E5E5E5",background:"none",fontFamily:"Epilogue,sans-serif",fontSize:11,color:"#6B7280",padding:"5px 14px",borderRadius:6,cursor:"pointer"}}>Cancel</button>
                   </div>
                 </div>
               )}
             </div>
+
+            {/* Right: Company details */}
+            <div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                <span className="e" style={{fontSize:10,letterSpacing:".1em",textTransform:"uppercase",color:"#9CA3AF"}}>Company details</span>
+                {!detailsEdit&&<button onClick={()=>setDetailsEdit(true)} style={{border:"none",background:"none",fontFamily:"Epilogue,sans-serif",fontSize:11,color:"#9CA3AF",cursor:"pointer",padding:0}}>Edit</button>}
+              </div>
+              {!detailsEdit ? (
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  {[
+                    ["🌐 Website", detailsForm.website, detailsForm.website ? <a href={detailsForm.website} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} style={{fontFamily:"Epilogue,sans-serif",fontSize:12,color:"#4F46E5",textDecoration:"none"}}>{detailsForm.website.replace(/^https?:\/\/|\/$/g,"")}</a> : null],
+                    ["🏭 Industry", detailsForm.industry, null],
+                    ["👥 Size", detailsForm.company_size, null],
+                    ["💰 Deal value", detailsForm.deal_value, detailsForm.deal_value ? fmtC(detailsForm.deal_value) : null],
+                  ].map(([label, val, custom]) => (
+                    <div key={label} style={{display:"flex",gap:8,alignItems:"center"}}>
+                      <span className="e" style={{fontSize:11,color:"#9CA3AF",minWidth:80}}>{label}</span>
+                      <span className="e" style={{fontSize:12,color:val?"#1a1a1a":"#D1D5DB"}}>{custom || val || "—"}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {[
+                    ["Website", "website", "https://...", "text"],
+                    ["Industry", "industry", "e.g. Ad Tech", "text"],
+                    ["Company size", "company_size", "e.g. 51–200", "text"],
+                    ["Deal value (AUD)", "deal_value", "e.g. 50000", "number"],
+                  ].map(([label, field, placeholder, type]) => (
+                    <div key={field}>
+                      <label style={{fontFamily:"Epilogue,sans-serif",fontSize:10,letterSpacing:".08em",textTransform:"uppercase",color:"#9CA3AF",display:"block",marginBottom:3}}>{label}</label>
+                      {field === "industry" ? (
+                        <select value={detailsForm[field]} onChange={e=>setDetailsForm({...detailsForm,[field]:e.target.value})}
+                          style={{fontFamily:"Epilogue,sans-serif",fontSize:12,padding:"6px 10px",border:"1px solid #E5E5E5",borderRadius:6,width:"100%",outline:"none",background:"#fff"}}>
+                          <option value="">Select…</option>
+                          {INDUSTRIES.map(i=><option key={i}>{i}</option>)}
+                        </select>
+                      ) : field === "company_size" ? (
+                        <select value={detailsForm[field]} onChange={e=>setDetailsForm({...detailsForm,[field]:e.target.value})}
+                          style={{fontFamily:"Epilogue,sans-serif",fontSize:12,padding:"6px 10px",border:"1px solid #E5E5E5",borderRadius:6,width:"100%",outline:"none",background:"#fff"}}>
+                          <option value="">Select…</option>
+                          {["1–10","11–50","51–200","201–500","500+"].map(s=><option key={s}>{s}</option>)}
+                        </select>
+                      ) : (
+                        <input type={type} placeholder={placeholder} value={detailsForm[field]}
+                          onChange={e=>setDetailsForm({...detailsForm,[field]:e.target.value})}
+                          style={{fontFamily:"Epilogue,sans-serif",fontSize:12,padding:"6px 10px",border:"1px solid #E5E5E5",borderRadius:6,width:"100%",outline:"none",background:"#fff"}}/>
+                      )}
+                    </div>
+                  ))}
+                  <div style={{display:"flex",gap:8,marginTop:4}}>
+                    <button onClick={saveDetails} disabled={detailsSaving} style={{border:"none",background:"#1a1a1a",color:"#fff",fontFamily:"Epilogue,sans-serif",fontSize:11,padding:"5px 14px",borderRadius:6,cursor:"pointer",opacity:detailsSaving?0.6:1}}>{detailsSaving?"Saving…":"Save"}</button>
+                    <button onClick={()=>setDetailsEdit(false)} style={{border:"1px solid #E5E5E5",background:"none",fontFamily:"Epilogue,sans-serif",fontSize:11,color:"#6B7280",padding:"5px 14px",borderRadius:6,cursor:"pointer"}}>Cancel</button>
+                  </div>
+                </div>
+              )}
+            </div>
+
           </div>
 
           <div style={{display:"grid",gridTemplateColumns:"1fr 320px",gap:0}}>
